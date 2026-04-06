@@ -2,6 +2,7 @@ import { Scene } from "phaser";
 import { EventBus } from "../EventBus";
 import { Ball } from "../objects/Ball";
 import { Flipper } from "../objects/Flipper";
+import { addBodiesFromSvgPath } from "../utils/svgPhysics";
 
 export class Game extends Scene {
   private leftFlipper!: Flipper;
@@ -32,11 +33,36 @@ export class Game extends Scene {
     // Flipper pivot points (outer ends, fixed to the gutter walls)
     const flipperY = bottom - 60; // 760
 
+    const CORNER_R = 60; // radius of the top-corner inlay arcs
+
+    // ── Graphics ────────────────────────────────────────────────────────────
     const g = this.add.graphics();
     g.lineStyle(3, 0xcccccc, 1);
 
-    // Outer table rectangle
-    g.strokeRect(left, top, right - left, bottom - top);
+    // Outer table border with concave top corners.
+    // The two quarter-circle arcs are centred INSIDE the playfield at
+    // (left+CORNER_R, top+CORNER_R) and (right-CORNER_R, top+CORNER_R).
+    // This means their concave (inner) face points toward the playfield, so
+    // the ball is guided smoothly around each corner rather than bouncing off
+    // a convex bump.
+    g.beginPath();
+    g.moveTo(left, top + CORNER_R); // start at left wall, bottom of top-left arc
+    // Top-left concave arc: (20,80) → (80,20), clockwise, centre (80,80)
+    g.arc(
+      left + CORNER_R,
+      top + CORNER_R,
+      CORNER_R,
+      Math.PI,
+      -Math.PI / 2,
+      false
+    );
+    g.lineTo(right - CORNER_R, top); // top wall → (380,20)
+    // Top-right concave arc: (380,20) → (440,80), clockwise, centre (380,80)
+    g.arc(right - CORNER_R, top + CORNER_R, CORNER_R, -Math.PI / 2, 0, false);
+    g.lineTo(right, bottom); // right wall
+    g.lineTo(left, bottom); // bottom wall
+    g.closePath(); // left wall back to start
+    g.strokePath();
 
     // Plunger lane separator (runs from entry point to the bottom)
     g.beginPath();
@@ -61,6 +87,60 @@ export class Game extends Scene {
     g.moveTo(plungerSep, gutterY);
     g.lineTo(gutterInnerRight, flipperY);
     g.strokePath();
+
+    // ── Physics ─────────────────────────────────────────────────────────────
+    const WALL_T = 4; // wall thickness in px
+
+    // Add a static segment body between two world-space points.
+    const addSeg = (x1: number, y1: number, x2: number, y2: number) => {
+      this.matter.add.rectangle(
+        (x1 + x2) / 2,
+        (y1 + y2) / 2,
+        Math.hypot(x2 - x1, y2 - y1),
+        WALL_T,
+        {
+          isStatic: true,
+          angle: Math.atan2(y2 - y1, x2 - x1),
+          label: "wall",
+          friction: 0.05,
+          restitution: 0.3,
+        }
+      );
+    };
+
+    // Outer border — straight walls trimmed to the arc endpoints so the
+    // geometry is seamless with the concave corner inlays below.
+    addSeg(left + CORNER_R, top, right - CORNER_R, top); // top (between inlays)
+    addSeg(left, bottom, right, bottom); // bottom
+    addSeg(left, top + CORNER_R, left, bottom); // left (below inlay)
+    addSeg(right, top + CORNER_R, right, bottom); // right (below inlay)
+
+    // Top corner inlays — concave quarter-circle arcs whose centre of
+    // curvature sits INSIDE the playfield.  A ball approaching the corner
+    // from the playfield is therefore on the concave (inner) side of the arc
+    // and is guided smoothly around rather than bounced off a convex bump.
+    //
+    // SVG arc: sweep-flag=0 → counterclockwise, which produces a centre at
+    // (right-CORNER_R, top+CORNER_R) and (left+CORNER_R, top+CORNER_R).
+    addBodiesFromSvgPath(
+      this,
+      // Top-right: from right wall (440,80) counterclockwise to top wall (380,20)
+      `M${right},${top + CORNER_R} A${CORNER_R},${CORNER_R} 0 0,0 ${right - CORNER_R},${top}`
+    );
+    addBodiesFromSvgPath(
+      this,
+      // Top-left: from top wall (80,20) counterclockwise to left wall (20,80)
+      `M${left + CORNER_R},${top} A${CORNER_R},${CORNER_R} 0 0,0 ${left},${top + CORNER_R}`
+    );
+
+    // Plunger lane separator
+    addSeg(plungerSep, plungerEntryY, plungerSep, bottom);
+
+    // Gutter diagonals
+    addSeg(left, gutterY, gutterInnerLeft, flipperY);
+    addSeg(plungerSep, gutterY, gutterInnerRight, flipperY);
+
+    // ── Game objects ─────────────────────────────────────────────────────────
 
     // Flippers
     this.leftFlipper = new Flipper(this, gutterInnerLeft, flipperY, "left");
