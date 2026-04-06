@@ -30,9 +30,11 @@
     "check": "tsc --noEmit && pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@t3-oss/env-core": "^0.13.11",
     "phaser": "^3.90.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",

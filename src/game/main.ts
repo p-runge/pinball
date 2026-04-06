@@ -1,6 +1,7 @@
 import { Game as PinballGame } from "./scenes/Game";
 import { MainMenu } from "./scenes/MainMenu";
 import { AUTO, Game, Scale } from "phaser";
+import { env } from "../env";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: AUTO,
@@ -17,7 +18,7 @@ const config: Phaser.Types.Core.GameConfig = {
     matter: {
       gravity: { x: 0, y: 1 },
       // Set debug: true to visualise collision shapes during development
-      debug: false,
+      debug: env.VITE_DEBUG,
     },
   },
   scene: [MainMenu, PinballGame],
