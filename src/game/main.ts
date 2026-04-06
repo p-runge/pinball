@@ -12,6 +12,14 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 480,
     height: 840,
   },
+  physics: {
+    default: "matter",
+    matter: {
+      gravity: { x: 0, y: 1 },
+      // Set debug: true to visualise collision shapes during development
+      debug: false,
+    },
+  },
   scene: [MainMenu, PinballGame],
 };
 
