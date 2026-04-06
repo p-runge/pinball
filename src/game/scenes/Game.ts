@@ -1,5 +1,6 @@
 import { Scene } from "phaser";
 import { EventBus } from "../EventBus";
+import { Ball } from "../objects/Ball";
 import { Flipper } from "../objects/Flipper";
 
 export class Game extends Scene {
@@ -64,6 +65,10 @@ export class Game extends Scene {
     // Flippers
     this.leftFlipper = new Flipper(this, gutterInnerLeft, flipperY, "left");
     this.rightFlipper = new Flipper(this, gutterInnerRight, flipperY, "right");
+
+    // Ball — spawn slightly above the left flipper so it rolls down into the playfield, giving
+    // the player a moment to react instead of dropping it straight onto the flippers.
+    new Ball(this, gutterInnerLeft + 20, flipperY - 200);
 
     // Keyboard controls — key events fire immediately on press/release,
     // before the next update() frame, giving instant flipper response.
