@@ -23,14 +23,16 @@ export class Ball extends Phaser.GameObjects.Container {
 
     this.physicsBody = scene.matter.bodies.circle(x, y, RADIUS, {
       label: "ball",
-      restitution: 0.5,
+      restitution: 0.1,
       friction: 0.01,
       frictionAir: 0.005,
     });
     scene.matter.world.add(this.physicsBody);
 
-    scene.events.on("update", this.sync, this);
-    this.once("destroy", () => scene.events.off("update", this.sync, this));
+    scene.matter.world.on("afterupdate", this.sync, this);
+    this.once("destroy", () =>
+      scene.matter.world.off("afterupdate", this.sync, this)
+    );
   }
 
   private sync(): void {

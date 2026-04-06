@@ -15,7 +15,7 @@ export class Game extends Scene {
     const { width, height } = this.scale;
 
     // Table boundaries
-    const left = 40;
+    const left = 20;
     const right = width - 40; // 440
     const top = 20;
     const bottom = height - 20; // 820
@@ -85,5 +85,21 @@ export class Game extends Scene {
     rightKey.on("up", () => this.rightFlipper.deactivate());
 
     EventBus.emit("current-scene-ready", this);
+
+    // Disable the automatic per-frame physics step so we can sub-step manually
+    // in update(). More steps per render frame = finer collision granularity
+    // during fast flipper movement, preventing the ball from being skipped over.
+    this.matter.world.autoUpdate = false;
+  }
+
+  // Sub-step the physics engine each render frame.
+  // At 60 fps with STEPS=3 each step covers ~5.5 ms, keeping the maximum
+  // distance any body travels per step well below the ball's radius.
+  update(_time: number, delta: number): void {
+    const STEPS = 3;
+    const stepDelta = delta / STEPS;
+    for (let i = 0; i < STEPS; i++) {
+      this.matter.world.step(stepDelta);
+    }
   }
 }
