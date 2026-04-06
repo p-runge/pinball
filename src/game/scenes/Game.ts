@@ -3,6 +3,9 @@ import { EventBus } from "../EventBus";
 import { Flipper } from "../objects/Flipper";
 
 export class Game extends Scene {
+  private leftFlipper!: Flipper;
+  private rightFlipper!: Flipper;
+
   constructor() {
     super("Game");
   }
@@ -58,9 +61,23 @@ export class Game extends Scene {
     g.lineTo(gutterInnerRight, flipperY);
     g.strokePath();
 
-    // Flippers — positioned at their pivot points (outer ends)
-    new Flipper(this, gutterInnerLeft, flipperY, "left");
-    new Flipper(this, gutterInnerRight, flipperY, "right");
+    // Flippers
+    this.leftFlipper = new Flipper(this, gutterInnerLeft, flipperY, "left");
+    this.rightFlipper = new Flipper(this, gutterInnerRight, flipperY, "right");
+
+    // Keyboard controls — key events fire immediately on press/release,
+    // before the next update() frame, giving instant flipper response.
+    const leftKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.LEFT
+    );
+    const rightKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.RIGHT
+    );
+
+    leftKey.on("down", () => this.leftFlipper.activate());
+    leftKey.on("up", () => this.leftFlipper.deactivate());
+    rightKey.on("down", () => this.rightFlipper.activate());
+    rightKey.on("up", () => this.rightFlipper.deactivate());
 
     EventBus.emit("current-scene-ready", this);
   }
