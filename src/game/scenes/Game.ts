@@ -1,5 +1,6 @@
 import { Scene } from "phaser";
 import { EventBus } from "../EventBus";
+import { Flipper } from "../objects/Flipper";
 
 export class Game extends Scene {
   constructor() {
@@ -24,13 +25,8 @@ export class Game extends Scene {
     const gutterInnerLeft = left + 90; // 130 — where left gutter meets flipper level
     const gutterInnerRight = plungerSep - 90; // 314 — where right gutter meets flipper level
 
-    // Flippers
+    // Flipper pivot points (outer ends, fixed to the gutter walls)
     const flipperY = bottom - 60; // 760
-    const flipperLeftOuter = gutterInnerLeft; // 130
-    const flipperLeftInner = 215;
-    const flipperRightInner = 230;
-    const flipperRightOuter = gutterInnerRight; // 314
-    const flipperTipY = flipperY - 12; // slight upward angle at inner tip
 
     const g = this.add.graphics();
     g.lineStyle(3, 0xcccccc, 1);
@@ -62,18 +58,9 @@ export class Game extends Scene {
     g.lineTo(gutterInnerRight, flipperY);
     g.strokePath();
 
-    // Left flipper
-    g.lineStyle(4, 0xffffff, 1);
-    g.beginPath();
-    g.moveTo(flipperLeftOuter, flipperY);
-    g.lineTo(flipperLeftInner, flipperTipY);
-    g.strokePath();
-
-    // Right flipper
-    g.beginPath();
-    g.moveTo(flipperRightOuter, flipperY);
-    g.lineTo(flipperRightInner, flipperTipY);
-    g.strokePath();
+    // Flippers — positioned at their pivot points (outer ends)
+    new Flipper(this, gutterInnerLeft, flipperY, "left");
+    new Flipper(this, gutterInnerRight, flipperY, "right");
 
     EventBus.emit("current-scene-ready", this);
   }
