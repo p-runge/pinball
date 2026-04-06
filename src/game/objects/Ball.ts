@@ -23,7 +23,7 @@ export class Ball extends Phaser.GameObjects.Container {
 
     this.physicsBody = scene.matter.bodies.circle(x, y, RADIUS, {
       label: "ball",
-      restitution: 0.1,
+      restitution: 0.3,
       friction: 0.01,
       frictionAir: 0.005,
     });
