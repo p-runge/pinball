@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 
-const RADIUS = 15;
+export const BALL_RADIUS = 15;
+const RADIUS = BALL_RADIUS;
 
 /**
  * The pinball. A dynamic Matter.js circle body whose visual Container

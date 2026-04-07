@@ -10,6 +10,5 @@ export const env = createEnv({
       .transform((val) => val === "true"),
   },
   server: {},
-  // @ts-expect-error - workaround for missing type in env-core package
   runtimeEnv: import.meta.env,
 });

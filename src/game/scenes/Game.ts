@@ -1,7 +1,8 @@
 import { Scene } from "phaser";
 import { EventBus } from "../EventBus";
-import { Ball } from "../objects/Ball";
+import { Ball, BALL_RADIUS } from "../objects/Ball";
 import { Flipper } from "../objects/Flipper";
+import { Plunger, PLUNGER_BODY_H } from "../objects/Plunger";
 import { addBodiesFromSvgPath } from "../utils/svgPhysics";
 
 export class Game extends Scene {
@@ -111,7 +112,9 @@ export class Game extends Scene {
     // Outer border — straight walls trimmed to the arc endpoints so the
     // geometry is seamless with the concave corner inlays below.
     addSeg(left + CORNER_R, top, right - CORNER_R, top); // top (between inlays)
-    addSeg(left, bottom, right, bottom); // bottom
+    // Bottom wall only covers the main playfield; the plunger lane uses the
+    // plunger body itself as its floor so the ball rests on (and is launched by) it.
+    addSeg(left, bottom, plungerSep, bottom); // main playfield bottom
     addSeg(left, top + CORNER_R, left, bottom); // left (below inlay)
     addSeg(right, top + CORNER_R, right, bottom); // right (below inlay)
 
@@ -146,9 +149,26 @@ export class Game extends Scene {
     this.leftFlipper = new Flipper(this, gutterInnerLeft, flipperY, "left");
     this.rightFlipper = new Flipper(this, gutterInnerRight, flipperY, "right");
 
-    // Ball — spawn slightly above the left flipper so it rolls down into the playfield, giving
-    // the player a moment to react instead of dropping it straight onto the flippers.
-    new Ball(this, gutterInnerLeft + 20, flipperY - 200);
+    // Plunger lane setup.
+    // The plunger body (full lane width) acts as the floor of the lane so the
+    // ball rests on it and is launched by it through physics collision.
+    // restY: plunger centre flush with the table bottom (head top = bottom - BODY_H/2).
+    const laneX = (plungerSep + right) / 2; // horizontal centre of the lane (422)
+    const plungerRestY = bottom - PLUNGER_BODY_H / 2; // 816
+
+    // Ball spawns on the plunger surface: centre = restY - half-body - ball-radius.
+    new Ball(this, laneX, plungerRestY - PLUNGER_BODY_H / 2 - BALL_RADIUS);
+
+    // Plunger: sensor covers the lane from the entry point down to the body.
+    // The charge bar is rendered just outside the right table wall.
+    new Plunger(
+      this,
+      laneX,
+      plungerRestY,
+      plungerEntryY, // top of sensor = lane entry
+      right + 8, // charge bar X
+      bottom - 10 // charge bar bottom Y
+    );
 
     // Keyboard controls — key events fire immediately on press/release,
     // before the next update() frame, giving instant flipper response.
