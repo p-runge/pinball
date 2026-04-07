@@ -4,11 +4,15 @@ export const BALL_RADIUS = 15;
 const RADIUS = BALL_RADIUS;
 
 /**
- * The pinball. A dynamic Matter.js circle body whose visual Container
- * is synced to the physics position every frame via a scene update listener.
+ * The pinball. A dynamic Matter.js circle body whose visual Container is
+ * synced to the physics position after every sub-step.
+ *
+ * Tunnelling prevention is handled by the CCD system in Game.ts, which
+ * predicts the ball's trajectory before each step and reflects its velocity
+ * at the contact surface.  No speed cap is applied here.
  */
 export class Ball extends Phaser.GameObjects.Container {
-  private readonly physicsBody: MatterJS.BodyType;
+  private readonly _physicsBody: MatterJS.BodyType;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -22,13 +26,13 @@ export class Ball extends Phaser.GameObjects.Container {
     this.add(g);
     scene.add.existing(this);
 
-    this.physicsBody = scene.matter.bodies.circle(x, y, RADIUS, {
+    this._physicsBody = scene.matter.bodies.circle(x, y, RADIUS, {
       label: "ball",
       restitution: 0.3,
       friction: 0.01,
       frictionAir: 0.005,
     });
-    scene.matter.world.add(this.physicsBody);
+    scene.matter.world.add(this._physicsBody);
 
     scene.matter.world.on("afterupdate", this.sync, this);
     this.once("destroy", () =>
@@ -36,7 +40,12 @@ export class Ball extends Phaser.GameObjects.Container {
     );
   }
 
+  /** Exposes the underlying Matter.js body for external systems (e.g. CCD). */
+  get physicsBody(): MatterJS.BodyType {
+    return this._physicsBody;
+  }
+
   private sync(): void {
-    this.setPosition(this.physicsBody.position.x, this.physicsBody.position.y);
+    this.setPosition(this._physicsBody.position.x, this._physicsBody.position.y);
   }
 }

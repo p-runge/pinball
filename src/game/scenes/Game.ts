@@ -4,10 +4,30 @@ import { Ball, BALL_RADIUS } from "../objects/Ball";
 import { Flipper } from "../objects/Flipper";
 import { Plunger, PLUNGER_BODY_H } from "../objects/Plunger";
 import { addBodiesFromSvgPath } from "../utils/svgPhysics";
+import { sweptCircleVsConvex } from "../utils/ccd";
+
+// Thickness used for all straight wall segments (and the minimum across curved
+// ones).
+const WALL_T = 4;
+
+// Fixed number of physics sub-steps per render frame.  Three steps gives smooth
+// simulation; tunnelling is prevented by CCD rather than step count.
+const STEPS = 3;
+
+// Matter.js default base delta (ms) used for velocity normalisation.
+const BASE_DELTA = 1000 / 60; // 16.667 ms
+
+// Restitution to apply in CCD bounces — must match the wall bodies' restitution.
+const WALL_RESTITUTION = 0.3;
 
 export class Game extends Scene {
   private leftFlipper!: Flipper;
   private rightFlipper!: Flipper;
+  private ball!: Ball;
+  /** Static wall bodies checked each step by the CCD pre-pass. */
+  private wallBodies: MatterJS.BodyType[] = [];
+  /** Delta (ms) of the current sub-step — shared with the CCD handler. */
+  private currentStepDelta = BASE_DELTA / STEPS;
 
   constructor() {
     super("Game");
@@ -90,7 +110,6 @@ export class Game extends Scene {
     g.strokePath();
 
     // ── Physics ─────────────────────────────────────────────────────────────
-    const WALL_T = 4; // wall thickness in px
 
     // Add a static segment body between two world-space points.
     const addSeg = (x1: number, y1: number, x2: number, y2: number) => {
@@ -103,7 +122,7 @@ export class Game extends Scene {
           isStatic: true,
           angle: Math.atan2(y2 - y1, x2 - x1),
           label: "wall",
-          friction: 0.05,
+          friction: 0.0,
           restitution: 0.3,
         }
       );
@@ -157,7 +176,11 @@ export class Game extends Scene {
     const plungerRestY = bottom - PLUNGER_BODY_H / 2; // 816
 
     // Ball spawns on the plunger surface: centre = restY - half-body - ball-radius.
-    new Ball(this, laneX, plungerRestY - PLUNGER_BODY_H / 2 - BALL_RADIUS);
+    this.ball = new Ball(
+      this,
+      laneX,
+      plungerRestY - PLUNGER_BODY_H / 2 - BALL_RADIUS
+    );
 
     // Plunger: sensor covers the lane from the entry point down to the body.
     // The charge bar is rendered just outside the right table wall.
@@ -186,20 +209,115 @@ export class Game extends Scene {
 
     EventBus.emit("current-scene-ready", this);
 
-    // Disable the automatic per-frame physics step so we can sub-step manually
-    // in update(). More steps per render frame = finer collision granularity
-    // during fast flipper movement, preventing the ball from being skipped over.
+    // Disable automatic per-frame physics step so we can sub-step manually.
     this.matter.world.autoUpdate = false;
+
+    // Collect all static, non-sensor wall bodies for the CCD pre-pass.
+    // Flipper and plunger bodies are deliberately excluded: their collisions are
+    // handled entirely by Matter.js so the correct launch impulse is applied.
+    this.wallBodies = this.matter.world
+      .getAllBodies()
+      .filter((b) => b.isStatic && !b.isSensor && b.label === "wall");
+
+    // Register the CCD handler *after* all objects (incl. flippers) have
+    // registered their own beforeupdate listeners, so it always fires last and
+    // sees the final flipper positions for that step.
+    this.matter.world.on("beforeupdate", this.ccdPrePass, this);
   }
 
-  // Sub-step the physics engine each render frame.
-  // At 60 fps with STEPS=3 each step covers ~5.5 ms, keeping the maximum
-  // distance any body travels per step well below the ball's radius.
+  /**
+   * CCD pre-pass — runs before every Matter.js sub-step.
+   *
+   * Predicts the ball's full displacement for the upcoming step using its
+   * current normalised velocity plus the gravity contribution.  If the swept
+   * circle intersects any wall body before completing that displacement, the
+   * ball is teleported to the contact surface and its velocity is reflected
+   * across the contact normal (elastic bounce with WALL_RESTITUTION).
+   *
+   * Up to three reflections are handled per step for cases where the ball
+   * would bounce between two walls (rare but theoretically possible at
+   * extreme speeds).
+   *
+   * Why this works instead of a speed cap:
+   *   A speed cap clips the velocity AFTER the fact and can fight Matter.js's
+   *   own impulse solver, leaving the ball oscillating against a wall
+   *   (sticking).  The CCD pre-pass intercepts the ball BEFORE the step,
+   *   ensures it never penetrates a wall, and lets Matter.js run on a
+   *   configuration that needs no further correction.
+   */
+  private ccdPrePass(event: { delta: number }): void {
+    const stepDelta = event.delta; // ms for this sub-step
+    const body = this.ball.physicsBody;
+
+    // Convert normalised velocity → raw pixels this step.
+    // Body.update uses: disp = normalised_vel × (stepDelta / baseDelta)
+    const scale = stepDelta / BASE_DELTA;
+
+    // Gravity contribution (px) for this step.
+    // Engine applies: force.y += mass × gravity.y × gravityScale (= 0.001)
+    // Body.update: vel.y += force.y / mass × dt²  →  += 0.001 × dt²
+    const gravY = 0.001 * stepDelta * stepDelta;
+
+    let vx = body.velocity.x;
+    let vy = body.velocity.y;
+    let cx = body.position.x;
+    let cy = body.position.y;
+    let hitAny = false;
+
+    // Iterative CCD: handle up to 3 wall bounces within a single step.
+    let rem = 1.0;
+    for (let iter = 0; iter < 3 && rem > 1e-4; iter++) {
+      const ddx = vx * scale;
+      const ddy = vy * scale + gravY;
+
+      let earliest: ReturnType<typeof sweptCircleVsConvex> = null;
+      for (const wb of this.wallBodies) {
+        // Wall bodies are single-part rectangles; parts[0] == the body itself.
+        if (!wb.vertices || wb.vertices.length < 3) continue;
+        const h = sweptCircleVsConvex(
+          cx,
+          cy,
+          ddx * rem,
+          ddy * rem,
+          BALL_RADIUS,
+          wb.vertices
+        );
+        if (h && (!earliest || h.t < earliest.t)) earliest = h;
+      }
+
+      if (!earliest) break;
+
+      // Move ball to just before the contact point.
+      const safeT = earliest.t * (1 - 1e-4);
+      cx += ddx * rem * safeT;
+      cy += ddy * rem * safeT;
+
+      // Reflect normalised velocity across the contact normal (elastic bounce).
+      const relVelN = vx * earliest.nx + vy * earliest.ny;
+      if (relVelN < 0) {
+        // Ball moving toward surface — apply restitution
+        vx -= (1 + WALL_RESTITUTION) * relVelN * earliest.nx;
+        vy -= (1 + WALL_RESTITUTION) * relVelN * earliest.ny;
+      }
+
+      rem *= 1 - earliest.t;
+      hitAny = true;
+    }
+
+    if (hitAny) {
+      // setPosition preserves velocity (shifts both position and positionPrev
+      // by the same delta), then setVelocity installs the reflected velocity.
+      this.matter.body.setPosition(body, { x: cx, y: cy });
+      this.matter.body.setVelocity(body, { x: vx, y: vy });
+    }
+  }
+
   update(_time: number, delta: number): void {
-    const STEPS = 3;
-    const stepDelta = delta / STEPS;
+    // Cap delta so a long pause (e.g. tab switch) doesn't produce a giant step.
+    const dt = Math.min(delta, 33);
+    this.currentStepDelta = dt / STEPS;
     for (let i = 0; i < STEPS; i++) {
-      this.matter.world.step(stepDelta);
+      this.matter.world.step(this.currentStepDelta);
     }
   }
 }

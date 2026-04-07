@@ -1,0 +1,118 @@
+/**
+ * Continuous Collision Detection (CCD) for a moving circle vs a convex polygon.
+ *
+ * Instead of capping ball speed or using many sub-steps to prevent tunnelling,
+ * we predict the ball's full displacement each physics step, detect the earliest
+ * wall contact using a swept-circle SAT test, and – when a hit is found –
+ * teleport the ball to the contact surface and apply a proper elastic reflection.
+ *
+ * This eliminates:
+ *   - Tunnelling (ball passing through walls at high speed)
+ *   - Wall-sticking (ball oscillating near a wall because the velocity cap was
+ *     fighting Matter.js's own collision resolution)
+ */
+
+export interface CcdHit {
+  /** Fraction of the displacement at which the circle first contacts the surface. */
+  readonly t: number;
+  /** Contact normal — points FROM the surface TOWARD the approaching ball. */
+  readonly nx: number;
+  readonly ny: number;
+}
+
+/**
+ * Swept-circle vs convex-polygon test using the Separating Axis Theorem on
+ * edge normals.
+ *
+ * Moves a circle of `radius` from (cx, cy) by (dx, dy) and returns the
+ * earliest contact fraction t ∈ (EPSILON, 1] together with the outward contact
+ * normal.  Returns null if:
+ *   - no contact occurs within this step
+ *   - the circle is already touching or overlapping the polygon (t ≤ EPSILON),
+ *     so that Matter.js can continue resolving those contacts undisturbed.
+ */
+export function sweptCircleVsConvex(
+  cx: number,
+  cy: number,
+  dx: number,
+  dy: number,
+  radius: number,
+  verts: ReadonlyArray<{ x: number; y: number }>,
+): CcdHit | null {
+  const n = verts.length;
+  if (n < 3) return null;
+
+  let tFirst = 0;
+  let tLast = 1;
+  let contactNx = 0;
+  let contactNy = 0;
+
+  for (let i = 0; i < n; i++) {
+    const v0 = verts[i];
+    const v1 = verts[(i + 1) % n];
+    const ex = v1.x - v0.x;
+    const ey = v1.y - v0.y;
+    const len = Math.hypot(ex, ey);
+    if (len < 1e-9) continue;
+
+    // One perpendicular of the edge — sign doesn't matter; we derive the
+    // contact normal direction from the ball's approach side below.
+    const nx = ey / len;
+    const ny = -ex / len;
+
+    // Project all polygon vertices onto this axis → slab [polyMin, polyMax].
+    let polyMin = Infinity;
+    let polyMax = -Infinity;
+    for (let j = 0; j < n; j++) {
+      const p = verts[j].x * nx + verts[j].y * ny;
+      if (p < polyMin) polyMin = p;
+      if (p > polyMax) polyMax = p;
+    }
+
+    // The circle center must stay in [polyMin − radius, polyMax + radius]
+    // to be "in contact" along this axis.
+    const lo = polyMin - radius;
+    const hi = polyMax + radius;
+
+    const cProj = cx * nx + cy * ny; // circle center projection at t = 0
+    const cVel = dx * nx + dy * ny; // rate of change along this axis
+
+    let tEnter: number;
+    let tLeave: number;
+
+    if (Math.abs(cVel) < 1e-9) {
+      if (cProj < lo || cProj > hi) return null; // parallel and already separated
+      tEnter = 0;
+      tLeave = 1;
+    } else {
+      const t1 = (lo - cProj) / cVel;
+      const t2 = (hi - cProj) / cVel;
+      tEnter = Math.min(t1, t2);
+      tLeave = Math.max(t1, t2);
+    }
+
+    if (tEnter > tFirst) {
+      tFirst = tEnter;
+      // Contact normal: points from the polygon surface toward the ball.
+      // If cVel > 0 the ball enters from the lo (−n) side → flip n.
+      // If cVel < 0 the ball enters from the hi (+n) side → keep n.
+      if (cVel > 0) {
+        contactNx = -nx;
+        contactNy = -ny;
+      } else {
+        contactNx = nx;
+        contactNy = ny;
+      }
+    }
+
+    tLast = Math.min(tLast, tLeave);
+    if (tFirst > tLast) return null; // a separating axis was found
+  }
+
+  // Ignore contacts where the ball is already touching / overlapping —
+  // let Matter.js resolve those with its own position/velocity solver.
+  const EPSILON = 0.002;
+  if (tFirst < EPSILON || tFirst > 1) return null;
+
+  return { t: tFirst, nx: contactNx, ny: contactNy };
+}
