@@ -29,8 +29,8 @@ export class Ball extends Phaser.GameObjects.Container {
     this._physicsBody = scene.matter.bodies.circle(x, y, RADIUS, {
       label: "ball",
       restitution: 0.3,
-      friction: 0.01,
-      frictionAir: 0.005,
+      friction: 0,
+      //   frictionAir: 0.001,
     });
     scene.matter.world.add(this._physicsBody);
 
@@ -46,6 +46,9 @@ export class Ball extends Phaser.GameObjects.Container {
   }
 
   private sync(): void {
-    this.setPosition(this._physicsBody.position.x, this._physicsBody.position.y);
+    this.setPosition(
+      this._physicsBody.position.x,
+      this._physicsBody.position.y
+    );
   }
 }

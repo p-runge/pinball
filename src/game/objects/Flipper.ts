@@ -93,7 +93,7 @@ export class Flipper extends Phaser.GameObjects.Container {
     const compound = body.create({
       parts: [trapPart, pivotPart, tipPart],
       isStatic: true, // engine never moves it; we drive position ourselves
-      friction: 0.05,
+      friction: 0.0,
       restitution: 0.3,
       label: "flipper",
     });

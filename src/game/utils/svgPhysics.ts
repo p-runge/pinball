@@ -133,7 +133,7 @@ export function addBodiesFromSvgPath(
   const defaults: Phaser.Types.Physics.Matter.MatterBodyConfig = {
     isStatic: true,
     label: "wall",
-    friction: 0.05,
+    friction: 0.0,
     restitution: 0.3,
   };
   const opts = { ...defaults, ...options };

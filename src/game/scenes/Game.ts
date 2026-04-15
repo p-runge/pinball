@@ -305,9 +305,22 @@ export class Game extends Scene {
     }
 
     if (hitAny) {
-      // setPosition preserves velocity (shifts both position and positionPrev
-      // by the same delta), then setVelocity installs the reflected velocity.
-      this.matter.body.setPosition(body, { x: cx, y: cy });
+      // Compute the correct end-of-step position: contact point + remaining
+      // post-bounce travel (fraction `rem` of the step still left).
+      const finalX = cx + vx * scale * rem;
+      const finalY = cy + (vy * scale + gravY) * rem;
+
+      // Pre-position the ball one full velocity-step *behind* finalPos so that
+      // when Matter.js advances it by (v * scale + gravY) it lands exactly on
+      // finalPos. This avoids the double-displacement where the old code placed
+      // the ball at the contact point and Matter.js then added a full extra step.
+      // Because the reflected velocity points away from every wall we bounced off,
+      // the brief sub-pixel overlap with a wall surface does not trigger a second
+      // impulse from Matter.js (relVelN > 0 → no impulse applied).
+      this.matter.body.setPosition(body, {
+        x: finalX - vx * scale,
+        y: finalY - (vy * scale + gravY),
+      });
       this.matter.body.setVelocity(body, { x: vx, y: vy });
     }
   }
