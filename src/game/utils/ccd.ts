@@ -26,7 +26,7 @@ function closestPointOnSegment(
   ax: number,
   ay: number,
   bx: number,
-  by: number,
+  by: number
 ): { x: number; y: number } {
   const abx = bx - ax;
   const aby = by - ay;
@@ -35,7 +35,7 @@ function closestPointOnSegment(
 
   const t = Math.max(
     0,
-    Math.min(1, ((px - ax) * abx + (py - ay) * aby) / lenSq),
+    Math.min(1, ((px - ax) * abx + (py - ay) * aby) / lenSq)
   );
   return { x: ax + abx * t, y: ay + aby * t };
 }
@@ -57,7 +57,7 @@ export function sweptCircleVsConvex(
   dx: number,
   dy: number,
   radius: number,
-  verts: ReadonlyArray<{ x: number; y: number }>,
+  verts: ReadonlyArray<{ x: number; y: number }>
 ): CcdHit | null {
   const n = verts.length;
   if (n < 3) return null;
@@ -144,14 +144,7 @@ export function sweptCircleVsConvex(
   for (let i = 0; i < n; i++) {
     const v0 = verts[i];
     const v1 = verts[(i + 1) % n];
-    const closest = closestPointOnSegment(
-      hitCx,
-      hitCy,
-      v0.x,
-      v0.y,
-      v1.x,
-      v1.y,
-    );
+    const closest = closestPointOnSegment(hitCx, hitCy, v0.x, v0.y, v1.x, v1.y);
     const offX = hitCx - closest.x;
     const offY = hitCy - closest.y;
     const distSq = offX * offX + offY * offY;
