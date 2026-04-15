@@ -20,6 +20,26 @@ export interface CcdHit {
   readonly ny: number;
 }
 
+function closestPointOnSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): { x: number; y: number } {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const lenSq = abx * abx + aby * aby;
+  if (lenSq < 1e-12) return { x: ax, y: ay };
+
+  const t = Math.max(
+    0,
+    Math.min(1, ((px - ax) * abx + (py - ay) * aby) / lenSq),
+  );
+  return { x: ax + abx * t, y: ay + aby * t };
+}
+
 /**
  * Swept-circle vs convex-polygon test using the Separating Axis Theorem on
  * edge normals.
@@ -114,5 +134,35 @@ export function sweptCircleVsConvex(
   const EPSILON = 0.002;
   if (tFirst < EPSILON || tFirst > 1) return null;
 
-  return { t: tFirst, nx: contactNx, ny: contactNy };
+  const hitCx = cx + dx * tFirst;
+  const hitCy = cy + dy * tFirst;
+
+  let refinedNx = contactNx;
+  let refinedNy = contactNy;
+  let bestDistSq = Infinity;
+
+  for (let i = 0; i < n; i++) {
+    const v0 = verts[i];
+    const v1 = verts[(i + 1) % n];
+    const closest = closestPointOnSegment(
+      hitCx,
+      hitCy,
+      v0.x,
+      v0.y,
+      v1.x,
+      v1.y,
+    );
+    const offX = hitCx - closest.x;
+    const offY = hitCy - closest.y;
+    const distSq = offX * offX + offY * offY;
+
+    if (distSq > 1e-12 && distSq < bestDistSq) {
+      const dist = Math.sqrt(distSq);
+      refinedNx = offX / dist;
+      refinedNy = offY / dist;
+      bestDistSq = distSq;
+    }
+  }
+
+  return { t: tFirst, nx: refinedNx, ny: refinedNy };
 }

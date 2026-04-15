@@ -257,9 +257,12 @@ export class Game extends Scene {
     // Engine applies: force.y += mass × gravity.y × gravityScale (= 0.001)
     // Body.update: vel.y += force.y / mass × dt²  →  += 0.001 × dt²
     const gravY = 0.001 * stepDelta * stepDelta;
+    const gravVelY = gravY / scale;
 
-    let vx = body.velocity.x;
-    let vy = body.velocity.y;
+    // Matter applies gravity before advancing the body, so the actual motion
+    // this step follows the post-gravity velocity vector.
+    let stepVx = body.velocity.x;
+    let stepVy = body.velocity.y + gravVelY;
     let cx = body.position.x;
     let cy = body.position.y;
     let hitAny = false;
@@ -267,8 +270,8 @@ export class Game extends Scene {
     // Iterative CCD: handle up to 3 wall bounces within a single step.
     let rem = 1.0;
     for (let iter = 0; iter < 3 && rem > 1e-4; iter++) {
-      const ddx = vx * scale;
-      const ddy = vy * scale + gravY;
+      const ddx = stepVx * scale;
+      const ddy = stepVy * scale;
 
       let earliest: ReturnType<typeof sweptCircleVsConvex> = null;
       for (const wb of this.wallBodies) {
@@ -292,12 +295,12 @@ export class Game extends Scene {
       cx += ddx * rem * safeT;
       cy += ddy * rem * safeT;
 
-      // Reflect normalised velocity across the contact normal (elastic bounce).
-      const relVelN = vx * earliest.nx + vy * earliest.ny;
+      // Reflect the step's actual motion vector across the contact normal.
+      const relVelN = stepVx * earliest.nx + stepVy * earliest.ny;
       if (relVelN < 0) {
         // Ball moving toward surface — apply restitution
-        vx -= (1 + WALL_RESTITUTION) * relVelN * earliest.nx;
-        vy -= (1 + WALL_RESTITUTION) * relVelN * earliest.ny;
+        stepVx -= (1 + WALL_RESTITUTION) * relVelN * earliest.nx;
+        stepVy -= (1 + WALL_RESTITUTION) * relVelN * earliest.ny;
       }
 
       rem *= 1 - earliest.t;
@@ -307,8 +310,10 @@ export class Game extends Scene {
     if (hitAny) {
       // Compute the correct end-of-step position: contact point + remaining
       // post-bounce travel (fraction `rem` of the step still left).
-      const finalX = cx + vx * scale * rem;
-      const finalY = cy + (vy * scale + gravY) * rem;
+      const finalX = cx + stepVx * scale * rem;
+      const finalY = cy + stepVy * scale * rem;
+      const rawVx = stepVx;
+      const rawVy = stepVy - gravVelY;
 
       // Pre-position the ball one full velocity-step *behind* finalPos so that
       // when Matter.js advances it by (v * scale + gravY) it lands exactly on
@@ -318,10 +323,10 @@ export class Game extends Scene {
       // the brief sub-pixel overlap with a wall surface does not trigger a second
       // impulse from Matter.js (relVelN > 0 → no impulse applied).
       this.matter.body.setPosition(body, {
-        x: finalX - vx * scale,
-        y: finalY - (vy * scale + gravY),
+        x: finalX - rawVx * scale,
+        y: finalY - (rawVy * scale + gravY),
       });
-      this.matter.body.setVelocity(body, { x: vx, y: vy });
+      this.matter.body.setVelocity(body, { x: rawVx, y: rawVy });
     }
   }
 
