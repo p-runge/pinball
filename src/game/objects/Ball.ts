@@ -35,9 +35,10 @@ export class Ball extends Phaser.GameObjects.Container {
     scene.matter.world.add(this._physicsBody);
 
     scene.matter.world.on("afterupdate", this.sync, this);
-    this.once("destroy", () =>
-      scene.matter.world.off("afterupdate", this.sync, this)
-    );
+    this.once("destroy", () => {
+      scene.matter.world.off("afterupdate", this.sync, this);
+      scene.matter.world.remove(this._physicsBody);
+    });
   }
 
   /** Exposes the underlying Matter.js body for external systems (e.g. CCD). */

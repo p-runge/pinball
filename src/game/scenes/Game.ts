@@ -9,6 +9,8 @@ import { sweptCircleVsConvex } from "../utils/ccd";
 // Thickness used for all straight wall segments (and the minimum across curved
 // ones).
 const WALL_T = 4;
+const TOTAL_BALLS = 3;
+const TABLE_W = 420;
 
 // Fixed number of physics sub-steps per render frame.  Three steps gives smooth
 // simulation; tunnelling is prevented by CCD rather than step count.
@@ -20,39 +22,51 @@ const BASE_DELTA = 1000 / 60; // 16.667 ms
 // Restitution to apply in CCD bounces — must match the wall bodies' restitution.
 const WALL_RESTITUTION = 0.3;
 
+type CollisionEvent = {
+  pairs: Array<{ bodyA: MatterJS.BodyType; bodyB: MatterJS.BodyType }>;
+};
+
 export class Game extends Scene {
   private leftFlipper!: Flipper;
   private rightFlipper!: Flipper;
   private ball!: Ball;
+  private ballsText!: Phaser.GameObjects.Text;
   /** Static wall bodies checked each step by the CCD pre-pass. */
   private wallBodies: MatterJS.BodyType[] = [];
   /** Delta (ms) of the current sub-step — shared with the CCD handler. */
   private currentStepDelta = BASE_DELTA / STEPS;
+  private ballSpawnX = 0;
+  private ballSpawnY = 0;
+  private ballsLeft = TOTAL_BALLS;
+  private drainQueued = false;
 
   constructor() {
     super("Game");
   }
 
   create() {
+    this.ballsLeft = TOTAL_BALLS;
+    this.drainQueued = false;
+
     const { width, height } = this.scale;
 
     // Table boundaries
-    const left = 20;
-    const right = width - 40; // 440
+    const left = (width - TABLE_W) / 2;
+    const right = left + TABLE_W;
     const top = 20;
-    const bottom = height - 20; // 820
+    const bottom = height - 20;
 
     // Plunger lane (right side)
-    const plungerSep = right - 36; // 404 — separator between playfield and plunger lane
+    const plungerSep = right - 36; // separator between playfield and plunger lane
     const plungerEntryY = 200; // where ball can enter playfield from plunger lane
 
     // Bottom gutter diagonal start (where side walls angle inward)
-    const gutterY = bottom - 200; // 620
-    const gutterInnerLeft = left + 90; // 130 — where left gutter meets flipper level
-    const gutterInnerRight = plungerSep - 90; // 314 — where right gutter meets flipper level
+    const gutterY = bottom - 200;
+    const gutterInnerLeft = left + 90; // where left gutter meets flipper level
+    const gutterInnerRight = plungerSep - 90; // where right gutter meets flipper level
 
     // Flipper pivot points (outer ends, fixed to the gutter walls)
-    const flipperY = bottom - 60; // 760
+    const flipperY = bottom - 60;
 
     const CORNER_R = 60; // radius of the top-corner inlay arcs
 
@@ -68,7 +82,7 @@ export class Game extends Scene {
     // a convex bump.
     g.beginPath();
     g.moveTo(left, top + CORNER_R); // start at left wall, bottom of top-left arc
-    // Top-left concave arc: (20,80) → (80,20), clockwise, centre (80,80)
+    // Top-left concave arc from the left wall up into the top wall.
     g.arc(
       left + CORNER_R,
       top + CORNER_R,
@@ -77,12 +91,15 @@ export class Game extends Scene {
       -Math.PI / 2,
       false
     );
-    g.lineTo(right - CORNER_R, top); // top wall → (380,20)
-    // Top-right concave arc: (380,20) → (440,80), clockwise, centre (380,80)
+    g.lineTo(right - CORNER_R, top); // top wall
+    // Top-right concave arc from the top wall down into the right wall.
     g.arc(right - CORNER_R, top + CORNER_R, CORNER_R, -Math.PI / 2, 0, false);
     g.lineTo(right, bottom); // right wall
-    g.lineTo(left, bottom); // bottom wall
-    g.closePath(); // left wall back to start
+    g.strokePath();
+
+    g.beginPath();
+    g.moveTo(left, top + CORNER_R);
+    g.lineTo(left, bottom); // left wall
     g.strokePath();
 
     // Plunger lane separator (runs from entry point to the bottom)
@@ -131,9 +148,6 @@ export class Game extends Scene {
     // Outer border — straight walls trimmed to the arc endpoints so the
     // geometry is seamless with the concave corner inlays below.
     addSeg(left + CORNER_R, top, right - CORNER_R, top); // top (between inlays)
-    // Bottom wall only covers the main playfield; the plunger lane uses the
-    // plunger body itself as its floor so the ball rests on (and is launched by) it.
-    addSeg(left, bottom, plungerSep, bottom); // main playfield bottom
     addSeg(left, top + CORNER_R, left, bottom); // left (below inlay)
     addSeg(right, top + CORNER_R, right, bottom); // right (below inlay)
 
@@ -146,12 +160,12 @@ export class Game extends Scene {
     // (right-CORNER_R, top+CORNER_R) and (left+CORNER_R, top+CORNER_R).
     addBodiesFromSvgPath(
       this,
-      // Top-right: from right wall (440,80) counterclockwise to top wall (380,20)
+      // Top-right: from the right wall counterclockwise to the top wall.
       `M${right},${top + CORNER_R} A${CORNER_R},${CORNER_R} 0 0,0 ${right - CORNER_R},${top}`
     );
     addBodiesFromSvgPath(
       this,
-      // Top-left: from top wall (80,20) counterclockwise to left wall (20,80)
+      // Top-left: from the top wall counterclockwise to the left wall.
       `M${left + CORNER_R},${top} A${CORNER_R},${CORNER_R} 0 0,0 ${left},${top + CORNER_R}`
     );
 
@@ -172,15 +186,13 @@ export class Game extends Scene {
     // The plunger body (full lane width) acts as the floor of the lane so the
     // ball rests on it and is launched by it through physics collision.
     // restY: plunger centre flush with the table bottom (head top = bottom - BODY_H/2).
-    const laneX = (plungerSep + right) / 2; // horizontal centre of the lane (422)
-    const plungerRestY = bottom - PLUNGER_BODY_H / 2; // 816
+    const laneX = (plungerSep + right) / 2; // horizontal centre of the lane
+    const plungerRestY = bottom - PLUNGER_BODY_H / 2;
 
     // Ball spawns on the plunger surface: centre = restY - half-body - ball-radius.
-    this.ball = new Ball(
-      this,
-      laneX,
-      plungerRestY - PLUNGER_BODY_H / 2 - BALL_RADIUS
-    );
+    this.ballSpawnX = laneX;
+    this.ballSpawnY = plungerRestY - PLUNGER_BODY_H / 2 - BALL_RADIUS;
+    this.spawnBall();
 
     // Plunger: sensor covers the lane from the entry point down to the body.
     // The charge bar is rendered just outside the right table wall.
@@ -189,9 +201,30 @@ export class Game extends Scene {
       laneX,
       plungerRestY,
       plungerEntryY, // top of sensor = lane entry
-      right + 8, // charge bar X
+      right + 32, // charge bar X
       bottom - 10 // charge bar bottom Y
     );
+
+    // Drain sensor just below the table opening. Falling through it consumes
+    // the current ball without affecting the wall CCD system.
+    this.matter.add.rectangle(
+      (left + right) / 2,
+      bottom + BALL_RADIUS + 24,
+      right - left,
+      48,
+      { isStatic: true, isSensor: true, label: "drain-sensor" }
+    );
+
+    this.ballsText = this.add
+      .text(right + 24, top + 10, "", {
+        fontFamily: "Arial Black",
+        fontSize: 20,
+        color: "#ffffff",
+        stroke: "#000000",
+        strokeThickness: 4,
+      })
+      .setOrigin(0, 0);
+    this.updateBallsText();
 
     // Keyboard controls — key events fire immediately on press/release,
     // before the next update() frame, giving instant flipper response.
@@ -207,8 +240,6 @@ export class Game extends Scene {
     rightKey.on("down", () => this.rightFlipper.activate());
     rightKey.on("up", () => this.rightFlipper.deactivate());
 
-    EventBus.emit("current-scene-ready", this);
-
     // Disable automatic per-frame physics step so we can sub-step manually.
     this.matter.world.autoUpdate = false;
 
@@ -223,6 +254,55 @@ export class Game extends Scene {
     // registered their own beforeupdate listeners, so it always fires last and
     // sees the final flipper positions for that step.
     this.matter.world.on("beforeupdate", this.ccdPrePass, this);
+    this.matter.world.on("collisionstart", this.onCollisionStart, this);
+
+    EventBus.emit("current-scene-ready", this);
+  }
+
+  private spawnBall(): void {
+    this.ball = new Ball(this, this.ballSpawnX, this.ballSpawnY);
+  }
+
+  private updateBallsText(): void {
+    this.ballsText.setText(`BALLS: ${this.ballsLeft}`);
+  }
+
+  private onCollisionStart(event: CollisionEvent): void {
+    for (const { bodyA, bodyB } of event.pairs) {
+      if (this.isDrainPair(bodyA, bodyB)) {
+        this.queueBallDrain();
+        break;
+      }
+    }
+  }
+
+  private isDrainPair(
+    bodyA: MatterJS.BodyType,
+    bodyB: MatterJS.BodyType
+  ): boolean {
+    return (
+      (bodyA.label === "drain-sensor" && bodyB.label === "ball") ||
+      (bodyB.label === "drain-sensor" && bodyA.label === "ball")
+    );
+  }
+
+  private queueBallDrain(): void {
+    if (this.drainQueued) return;
+
+    this.drainQueued = true;
+    this.time.delayedCall(0, () => {
+      this.ball.destroy();
+      this.ballsLeft -= 1;
+      this.updateBallsText();
+
+      if (this.ballsLeft <= 0) {
+        this.scene.start("GameOver");
+        return;
+      }
+
+      this.spawnBall();
+      this.drainQueued = false;
+    });
   }
 
   /**
@@ -246,6 +326,8 @@ export class Game extends Scene {
    *   configuration that needs no further correction.
    */
   private ccdPrePass(event: { delta: number }): void {
+    if (this.drainQueued) return;
+
     const stepDelta = event.delta; // ms for this sub-step
     const body = this.ball.physicsBody;
 

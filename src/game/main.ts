@@ -1,4 +1,5 @@
 import { Game as PinballGame } from "./scenes/Game";
+import { GameOver } from "./scenes/GameOver";
 import { MainMenu } from "./scenes/MainMenu";
 import { AUTO, Game, Scale } from "phaser";
 import { env } from "../env";
@@ -10,7 +11,7 @@ const config: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Scale.FIT,
     autoCenter: Scale.CENTER_BOTH,
-    width: 480,
+    width: 680,
     height: 840,
   },
   physics: {
@@ -21,7 +22,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: env.VITE_DEBUG,
     },
   },
-  scene: [MainMenu, PinballGame],
+  scene: [MainMenu, PinballGame, GameOver],
 };
 
 const StartGame = (parent: string) => {
