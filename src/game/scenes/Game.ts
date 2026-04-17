@@ -1,6 +1,7 @@
 import { Scene } from "phaser";
 import { EventBus } from "../EventBus";
 import { Ball, BALL_RADIUS } from "../objects/Ball";
+import { Bumper } from "../objects/Bumper";
 import { Flipper } from "../objects/Flipper";
 import { Plunger, PLUNGER_BODY_H } from "../objects/Plunger";
 import { addBodiesFromSvgPath } from "../utils/svgPhysics";
@@ -181,6 +182,14 @@ export class Game extends Scene {
     // Flippers
     this.leftFlipper = new Flipper(this, gutterInnerLeft, flipperY, "left");
     this.rightFlipper = new Flipper(this, gutterInnerRight, flipperY, "right");
+
+    const bumperCenterX = (left + plungerSep) / 2;
+    const bumperTopY = top + 220;
+    const bumperDx = 42;
+    const bumperDy = 68;
+    new Bumper(this, bumperCenterX - bumperDx, bumperTopY);
+    new Bumper(this, bumperCenterX + bumperDx, bumperTopY);
+    new Bumper(this, bumperCenterX, bumperTopY + bumperDy);
 
     // Plunger lane setup.
     // The plunger body (full lane width) acts as the floor of the lane so the
