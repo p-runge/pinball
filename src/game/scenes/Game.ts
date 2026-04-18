@@ -5,7 +5,7 @@ import { Bumper } from "../objects/Bumper";
 import { Flipper } from "../objects/Flipper";
 import { Plunger, PLUNGER_BODY_H } from "../objects/Plunger";
 import { addBodiesFromSvgPath } from "../utils/svgPhysics";
-import { sweptCircleVsConvex } from "../utils/ccd";
+import { sweptCircleVsConvex, sweptConvexVsCircle } from "../utils/ccd";
 
 // Thickness used for all straight wall segments (and the minimum across curved
 // ones).
@@ -22,6 +22,8 @@ const BASE_DELTA = 1000 / 60; // 16.667 ms
 
 // Restitution to apply in CCD bounces — must match the wall bodies' restitution.
 const WALL_RESTITUTION = 0.3;
+// Restitution for flipper CCD contacts.  Higher than walls for a lively feel.
+const FLIPPER_RESTITUTION = 0.5;
 
 type CollisionEvent = {
   pairs: Array<{ bodyA: MatterJS.BodyType; bodyB: MatterJS.BodyType }>;
@@ -462,7 +464,102 @@ export class Game extends Scene {
         y: finalY - (rawVy * scale + gravY),
       });
       this.matter.body.setVelocity(body, { x: rawVx, y: rawVy });
+      return; // wall contact handled; skip flipper CCD this step
     }
+
+    // No wall contact this step — check whether a sweeping flipper hits the ball.
+    // Each flipper records prevAngle (before its step) and currentAngle (after).
+    // We binary-search for the exact fractional contact time, then compute the
+    // flipper's surface velocity at the contact point and apply the impulse.
+    this.applyFlipperCcd(body, scale, gravVelY, gravY);
+  }
+
+  /**
+   * Swept-flipper CCD.
+   *
+   * Checks both flippers for a rotating-polygon vs ball-circle contact this step.
+   * Takes the earliest contact (both flippers could theoretically contact in the
+   * same step), computes the exact surface velocity of the flipper at the impact
+   * point, and applies a physically correct impulse + position rewind so Matter
+   * sees a ball already moving away — preventing double-impulse from the engine.
+   */
+  private applyFlipperCcd(
+    body: MatterJS.BodyType,
+    scale: number,
+    gravVelY: number,
+    gravY: number
+  ): void {
+    type FlipperHit = {
+      t: number;
+      nx: number;
+      ny: number;
+      flipper: Flipper;
+    };
+
+    let earliest: FlipperHit | null = null;
+    for (const flipper of [this.leftFlipper, this.rightFlipper]) {
+      // Skip if the flipper didn't move this step.
+      if (Math.abs(flipper.currentAngle - flipper.prevAngle) < 1e-7) continue;
+
+      const hit = sweptConvexVsCircle(
+        body.position.x,
+        body.position.y,
+        BALL_RADIUS,
+        flipper.pivotWorldX,
+        flipper.pivotWorldY,
+        flipper.prevAngle,
+        flipper.currentAngle,
+        flipper.localVertices
+      );
+      if (hit && (!earliest || hit.t < earliest.t)) {
+        earliest = { ...hit, flipper };
+      }
+    }
+
+    if (!earliest) return;
+
+    // Angular displacement this step (radians, signed).
+    const ω = earliest.flipper.currentAngle - earliest.flipper.prevAngle;
+
+    // Contact point on the flipper surface = ball center – normal * radius.
+    const contactX = body.position.x - earliest.nx * BALL_RADIUS;
+    const contactY = body.position.y - earliest.ny * BALL_RADIUS;
+
+    // Flipper surface velocity at the contact point:  v = ω × r  (2D: ω·(-ry, rx))
+    const rx = contactX - earliest.flipper.pivotWorldX;
+    const ry = contactY - earliest.flipper.pivotWorldY;
+    const vSurfX = -ω * ry;
+    const vSurfY = ω * rx;
+
+    // Ball velocity with gravity already included (mirrors wall CCD convention).
+    const vBallX = body.velocity.x;
+    const vBallY = body.velocity.y + gravVelY;
+
+    // Relative velocity of ball w.r.t. flipper surface along the contact normal.
+    const relVn =
+      (vBallX - vSurfX) * earliest.nx + (vBallY - vSurfY) * earliest.ny;
+
+    // If the ball is already moving away from the surface, nothing to do.
+    if (relVn >= 0) return;
+
+    // Impulse magnitude: reverse the relative normal velocity with restitution.
+    const impulse = -(1 + FLIPPER_RESTITUTION) * relVn;
+    const newVx = vBallX + impulse * earliest.nx;
+    const newVy = vBallY + impulse * earliest.ny;
+
+    // Rewind the ball's position so Matter advances it to the correct final spot.
+    // finalPos = ball.pos + newVel * scale * (1 - t)   [remaining fraction of step]
+    // rewindPos = finalPos − newVel * scale             [minus a full step so Matter lands there]
+    const rem = 1 - earliest.t;
+    const finalX = body.position.x + newVx * scale * rem;
+    const finalY = body.position.y + newVy * scale * rem;
+    const rawVy = newVy - gravVelY; // store without gravity; Matter re-adds it
+
+    this.matter.body.setPosition(body, {
+      x: finalX - newVx * scale,
+      y: finalY - (rawVy * scale + gravY),
+    });
+    this.matter.body.setVelocity(body, { x: newVx, y: rawVy });
   }
 
   update(_time: number, delta: number): void {

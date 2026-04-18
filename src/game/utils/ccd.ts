@@ -159,3 +159,93 @@ export function sweptCircleVsConvex(
 
   return { t: tFirst, nx: refinedNx, ny: refinedNy };
 }
+
+/**
+ * CCD test for a convex polygon rotating about a fixed pivot vs a static circle.
+ *
+ * Sweeps the polygon from `fromAngle` to `toAngle` and binary-searches for the
+ * earliest fractional step time t ∈ (0, 1] at which a polygon edge first comes
+ * within `cr` of the circle center `(cx, cy)`.
+ *
+ * Returns null when:
+ *   - no contact occurs during the sweep
+ *   - the circle is already overlapping at `fromAngle` (let Matter resolve it)
+ *
+ * The returned normal points FROM the polygon surface TOWARD the circle center.
+ */
+export function sweptConvexVsCircle(
+  cx: number,
+  cy: number,
+  cr: number,
+  pivotX: number,
+  pivotY: number,
+  fromAngle: number,
+  toAngle: number,
+  localVerts: ReadonlyArray<{ x: number; y: number }>
+): { t: number; nx: number; ny: number } | null {
+  if (Math.abs(toAngle - fromAngle) < 1e-7) return null;
+
+  const n = localVerts.length;
+  if (n < 3) return null;
+
+  /** Closest squared distance from (cx,cy) to the polygon at the given angle,
+   *  plus the closest edge point for normal computation. */
+  function closestEdgeDist(angle: number): {
+    distSq: number;
+    epx: number;
+    epy: number;
+  } {
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    let best = Infinity;
+    let bx = 0;
+    let by = 0;
+    for (let i = 0; i < n; i++) {
+      const lv0 = localVerts[i];
+      const lv1 = localVerts[(i + 1) % n];
+      const w0x = pivotX + lv0.x * cosA - lv0.y * sinA;
+      const w0y = pivotY + lv0.x * sinA + lv0.y * cosA;
+      const w1x = pivotX + lv1.x * cosA - lv1.y * sinA;
+      const w1y = pivotY + lv1.x * sinA + lv1.y * cosA;
+      const cp = closestPointOnSegment(cx, cy, w0x, w0y, w1x, w1y);
+      const dx = cx - cp.x;
+      const dy = cy - cp.y;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < best) {
+        best = dSq;
+        bx = cp.x;
+        by = cp.y;
+      }
+    }
+    return { distSq: best, epx: bx, epy: by };
+  }
+
+  const crSq = cr * cr;
+
+  // No contact if still clear at end of sweep.
+  if (closestEdgeDist(toAngle).distSq >= crSq) return null;
+  // Already overlapping at start — let Matter handle it.
+  if (closestEdgeDist(fromAngle).distSq < crSq) return null;
+
+  // Binary search for the first angle where overlap begins.
+  let lo = 0.0;
+  let hi = 1.0;
+  for (let iter = 0; iter < 16; iter++) {
+    const mid = (lo + hi) * 0.5;
+    const angle = fromAngle + (toAngle - fromAngle) * mid;
+    if (closestEdgeDist(angle).distSq < crSq) hi = mid;
+    else lo = mid;
+  }
+
+  const tContact = hi;
+  const contactAngle = fromAngle + (toAngle - fromAngle) * tContact;
+  const { epx, epy, distSq } = closestEdgeDist(contactAngle);
+  const dist = Math.sqrt(distSq);
+  const len = dist > 1e-6 ? dist : 1e-6;
+
+  return {
+    t: tContact,
+    nx: (cx - epx) / len,
+    ny: (cy - epy) / len,
+  };
+}

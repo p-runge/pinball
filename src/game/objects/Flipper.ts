@@ -42,6 +42,21 @@ export class Flipper extends Phaser.GameObjects.Container {
   private isActivating = false;
   private prevTimestamp = -1;
 
+  /** Pivot-local vertices (body at world angle = 0). Cached at construction. */
+  readonly localVertices: ReadonlyArray<{ x: number; y: number }>;
+  /** Flipper angle at the start of the current step (before this step moved it). */
+  prevAngle: number;
+
+  get pivotWorldX(): number {
+    return this.pivotX;
+  }
+  get pivotWorldY(): number {
+    return this.pivotY;
+  }
+  get currentAngle(): number {
+    return this.physicsBody.angle;
+  }
+
   constructor(scene: Phaser.Scene, x: number, y: number, side: FlipperSide) {
     super(scene, x, y);
 
@@ -108,6 +123,19 @@ export class Flipper extends Phaser.GameObjects.Container {
     this.placeAt(this.restAngle);
     this.setRotation(this.restAngle);
     this.targetAngle = this.restAngle;
+    this.prevAngle = this.restAngle;
+
+    // Cache vertices in pivot-local frame (at body angle = 0).
+    // At restAngle: worldVert = pivot + R(restAngle) * localVert
+    // → localVert = R(-restAngle) * (worldVert - pivot)
+    const cosNeg = Math.cos(-this.restAngle);
+    const sinNeg = Math.sin(-this.restAngle);
+    this.localVertices =
+      this.physicsBody.vertices?.map((v) => {
+        const dx = v.x - this.pivotX;
+        const dy = v.y - this.pivotY;
+        return { x: dx * cosNeg - dy * sinNeg, y: dx * sinNeg + dy * cosNeg };
+      }) ?? [];
 
     scene.matter.world.on("beforeupdate", this.step, this);
     scene.matter.world.on("afterupdate", this.syncVisual, this);
@@ -115,6 +143,10 @@ export class Flipper extends Phaser.GameObjects.Container {
       scene.matter.world.off("beforeupdate", this.step, this);
       scene.matter.world.off("afterupdate", this.syncVisual, this);
     });
+  }
+
+  get isSwinging(): boolean {
+    return Math.abs(this.physicsBody.angle - this.targetAngle) > 0.001;
   }
 
   activate(): void {
@@ -134,6 +166,7 @@ export class Flipper extends Phaser.GameObjects.Container {
     if (dt <= 0) return;
 
     const currentAngle = this.physicsBody.angle;
+    this.prevAngle = currentAngle; // record before this step moves the body
     const diff = this.targetAngle - currentAngle;
 
     let newAngle: number;
