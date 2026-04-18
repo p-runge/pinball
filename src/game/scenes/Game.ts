@@ -273,13 +273,13 @@ export class Game extends Scene {
 
     // Slingshot bumpers — triangular kickers just above the gutter diagonals,
     // flush against the side walls.  Only the inner hypotenuse face is active.
-    const slingshotW = 40;
-    const slingshotH = 80;
+    const slingshotW = 60;
+    const slingshotH = 140;
     const onSlingshotHit = () => this.addScore(50);
     new Slingshot(
       this,
       leftWallX + 36,
-      gutterY + slingshotH,
+      gutterY + slingshotH - 40,
       "left",
       slingshotW,
       slingshotH,
@@ -288,7 +288,7 @@ export class Game extends Scene {
     new Slingshot(
       this,
       rightWallX - 36,
-      gutterY + slingshotH,
+      gutterY + slingshotH - 40,
       "right",
       slingshotW,
       slingshotH,
