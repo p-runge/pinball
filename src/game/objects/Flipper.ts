@@ -2,12 +2,18 @@ import Phaser from "phaser";
 
 export type FlipperSide = "left" | "right";
 
-const LENGTH = 70;
-const HALF_THICK = 10;
-const HALF_THIN = 5;
+export const FLIPPER_LENGTH = 70;
+export const FLIPPER_HALF_THICK = 10;
+export const FLIPPER_HALF_THIN = 5;
+export const FLIPPER_REST_ANGLE_DEG = 30;
+export const FLIPPER_ACTIVE_ANGLE_DEG = -30;
 
-const REST_ANGLE_DEG = 30;
-const ACTIVE_ANGLE_DEG = -30;
+const LENGTH = FLIPPER_LENGTH;
+const HALF_THICK = FLIPPER_HALF_THICK;
+const HALF_THIN = FLIPPER_HALF_THIN;
+
+const REST_ANGLE_DEG = FLIPPER_REST_ANGLE_DEG;
+const ACTIVE_ANGLE_DEG = FLIPPER_ACTIVE_ANGLE_DEG;
 
 // Maximum angular displacement per millisecond.
 const ACTIVATE_SPEED = Phaser.Math.DegToRad(60) / 30;
@@ -58,10 +64,11 @@ export class Flipper extends Phaser.GameObjects.Container {
   }
 
   constructor(scene: Phaser.Scene, x: number, y: number, side: FlipperSide) {
-    super(scene, x, y);
+    // Place the container at the physics pivot so setRotation() rotates around it.
+    super(scene, x, y + HALF_THICK);
 
     this.pivotX = x;
-    this.pivotY = y;
+    this.pivotY = y + HALF_THICK;
 
     const dir = side === "left" ? 1 : -1;
     this.restAngle = dir * Phaser.Math.DegToRad(REST_ANGLE_DEG);

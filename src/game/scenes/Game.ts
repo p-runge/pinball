@@ -2,7 +2,13 @@ import { Scene } from "phaser";
 import { EventBus } from "../EventBus";
 import { Ball, BALL_RADIUS } from "../objects/Ball";
 import { Bumper } from "../objects/Bumper";
-import { Flipper } from "../objects/Flipper";
+import {
+  Flipper,
+  FLIPPER_HALF_THICK,
+  FLIPPER_HALF_THIN,
+  FLIPPER_LENGTH,
+  FLIPPER_REST_ANGLE_DEG,
+} from "../objects/Flipper";
 import { Plunger, PLUNGER_BODY_H } from "../objects/Plunger";
 import { Slingshot } from "../objects/Slingshot";
 import { sweptCircleVsConvex, sweptConvexVsCircle } from "../utils/ccd";
@@ -76,37 +82,48 @@ export class Game extends Scene {
     const gutterInnerRight = plungerSep - 96;
 
     // Flipper pivot points (outer ends, fixed to the gutter walls)
-    const flipperY = bottom - 60;
+    const flipperY = gutterY + 140;
 
     // ── Lower-zone geometry ─────────────────────────────────────────────────
-    // Each channel wall runs vertically, then transitions via a 60° arc to the
-    // flipper rest angle (30° below horizontal), then a straight wall at that
-    // same angle leads directly to the flipper pivot.
+    // Each channel wall runs vertically, then transitions via an arc to the
+    // flipper upper-edge angle, then a straight wall at that same angle leads
+    // directly to the flipper pivot top-corner.
+    //
+    // The upper edge of the flipper at rest is slightly steeper than the centre
+    // axis because the flipper tapers (HALF_THICK at pivot → HALF_THIN at tip):
+    //   upperEdgeAngle = restAngle + atan2(HALF_THICK − HALF_THIN, LENGTH)
     //
     // Arc geometry (left side):
-    //   Center at (leftWallX + R, arcStartY).  Sweeps CCW from θ=180° (start,
-    //   tangent=downward) to θ=120° (end, tangent=30° below horizontal).
-    //   End point: (leftWallX + R/2, arcStartY + R·√3/2)
+    //   Centre at (leftWallX + R, arcStartY).  Sweeps CCW from θ=π (tangent=down)
+    //   to θ = π/2 + upperEdgeAngle  (tangent = upperEdgeAngle below horizontal).
+    //   arcEndDx = R·(1 − sin α),  arcEndDy = R·cos α   (where α = upperEdgeAngle)
     //
     // Tangent constraint — for the straight wall from arc end to reach the
-    // flipper pivot at 30°:  arcStartY = flipperY − (D + R) / √3
-    //   where D = gutterInnerLeft − leftWallX (horizontal distance wall→pivot)
-    const LANE_WALL_OFFSET = 36; // px from the outer wall to the channel wall
-    const LOWER_CORNER_R = 30; // arc radius; controls how "tight" the curve is
+    // flipper pivot:  arcStartY = flipperY − arcEndDy − tan(α)·(laneD − arcEndDx)
+    const LANE_WALL_OFFSET = 36;
+    const LOWER_CORNER_R = 30;
 
-    // World-space X of the channel wall on each side
     const leftWallX = left + LANE_WALL_OFFSET;
     const rightWallX = plungerSep - LANE_WALL_OFFSET;
 
-    // Horizontal distance from channel wall to flipper pivot (same on both sides)
     const laneD = gutterInnerLeft - leftWallX;
 
-    // Y where the vertical channel wall ends and the arc begins
-    const arcStartY = flipperY - (laneD + LOWER_CORNER_R) / Math.sqrt(3);
+    // Angle of the flipper's upper edge in its rest position (radians below horizontal)
+    const UPPER_EDGE_ANGLE =
+      Phaser.Math.DegToRad(FLIPPER_REST_ANGLE_DEG) +
+      Math.atan2(FLIPPER_HALF_THICK - FLIPPER_HALF_THIN, FLIPPER_LENGTH);
 
-    // Arc end-point offsets (R·cos60°, R·sin60°), mirrored on X for right side
-    const arcEndDx = LOWER_CORNER_R / 2;
-    const arcEndDy = (LOWER_CORNER_R * Math.sqrt(3)) / 2;
+    // Arc end point offsets from the arc start (which sits on the channel wall)
+    const arcEndDx = LOWER_CORNER_R * (1 - Math.sin(UPPER_EDGE_ANGLE));
+    const arcEndDy = LOWER_CORNER_R * Math.cos(UPPER_EDGE_ANGLE);
+
+    // Y where the vertical channel wall meets the arc
+    const arcStartY =
+      flipperY - arcEndDy - Math.tan(UPPER_EDGE_ANGLE) * (laneD - arcEndDx);
+
+    // Phaser arc end angles (left: π/2+α CCW from π; right: π/2−α CW from 0)
+    const arcEndAngleLeft = Math.PI / 2 + UPPER_EDGE_ANGLE;
+    const arcEndAngleRight = Math.PI / 2 - UPPER_EDGE_ANGLE;
 
     const CORNER_R = 60; // radius of the top-corner inlay arcs
 
@@ -154,39 +171,38 @@ export class Game extends Scene {
     g.lineTo(right, plungerEntryY);
     g.strokePath();
 
-    // ── Left channel wall + 60° arc + angled connector ──────────────────────
+    // ── Left channel wall + arc + angled connector ──────────────────────────
     g.beginPath();
     g.moveTo(leftWallX, gutterY);
-    // Vertical wall from gutterY down to the arc start
     g.lineTo(leftWallX, arcStartY);
-    // 60° CCW arc: center at (leftWallX+R, arcStartY), from θ=180° to θ=120°.
-    // End tangent matches the flipper rest angle (30° below horizontal).
+    // CCW arc: centre at (leftWallX+R, arcStartY), from θ=π to θ=π/2+α
+    // End tangent = UPPER_EDGE_ANGLE below horizontal (matches flipper upper edge).
     g.arc(
       leftWallX + LOWER_CORNER_R,
       arcStartY,
       LOWER_CORNER_R,
-      Math.PI, // θ=180°: start = (leftWallX, arcStartY)
-      (2 * Math.PI) / 3, // θ=120°: end tangent = 30° below horizontal
-      true // anticlockwise = decreasing angle
+      Math.PI,
+      arcEndAngleLeft,
+      true // anticlockwise (decreasing angle)
     );
-    // Straight wall at 30° slope from arc end to left flipper pivot
+    // Straight wall at upper-edge slope from arc end to flipper pivot top-corner
     g.lineTo(gutterInnerLeft, flipperY);
     g.strokePath();
 
-    // ── Right channel wall + 60° arc + angled connector ─────────────────────
+    // ── Right channel wall + arc + angled connector ──────────────────────────
     g.beginPath();
     g.moveTo(rightWallX, gutterY);
     g.lineTo(rightWallX, arcStartY);
-    // 60° CW arc: center at (rightWallX-R, arcStartY), from θ=0° to θ=60°.
+    // CW arc: centre at (rightWallX-R, arcStartY), from θ=0 to θ=π/2−α
     g.arc(
       rightWallX - LOWER_CORNER_R,
       arcStartY,
       LOWER_CORNER_R,
-      0, // θ=0°: start = (rightWallX, arcStartY)
-      Math.PI / 3, // θ=60°: end tangent = 30° below horizontal (mirrored)
-      false // clockwise = increasing angle
+      0,
+      arcEndAngleRight,
+      false // clockwise (increasing angle)
     );
-    // Straight wall at 30° slope from arc end to right flipper pivot
+    // Straight wall at upper-edge slope from arc end to flipper pivot top-corner
     g.lineTo(gutterInnerRight, flipperY);
     g.strokePath();
 
@@ -237,11 +253,11 @@ export class Game extends Scene {
     addSeg(plungerSep, plungerEntryY, plungerSep, bottom);
 
     // ── Lower-zone physics ───────────────────────────────────────────────────
-    // Left: vertical wall → 60° CCW arc → 30°-angled wall to pivot
+    // Left: vertical wall → CCW arc → upper-edge-angled wall to flipper pivot
     addSeg(leftWallX, gutterY, leftWallX, arcStartY);
     addBodiesFromSvgPath(
       this,
-      // sweep-flag=0 (CCW): from (leftWallX, arcStartY) to arc end at 120°
+      // sweep-flag=0 (CCW): from (leftWallX, arcStartY) to arc end
       `M${leftWallX},${arcStartY} A${LOWER_CORNER_R},${LOWER_CORNER_R} 0 0,0 ${leftWallX + arcEndDx},${arcStartY + arcEndDy}`
     );
     addSeg(
@@ -251,11 +267,11 @@ export class Game extends Scene {
       flipperY
     );
 
-    // Right: vertical wall → 60° CW arc → 30°-angled wall to pivot
+    // Right: vertical wall → CW arc → upper-edge-angled wall to flipper pivot
     addSeg(rightWallX, gutterY, rightWallX, arcStartY);
     addBodiesFromSvgPath(
       this,
-      // sweep-flag=1 (CW): from (rightWallX, arcStartY) to arc end at 60°
+      // sweep-flag=1 (CW): from (rightWallX, arcStartY) to arc end
       `M${rightWallX},${arcStartY} A${LOWER_CORNER_R},${LOWER_CORNER_R} 0 0,1 ${rightWallX - arcEndDx},${arcStartY + arcEndDy}`
     );
     addSeg(
@@ -274,24 +290,26 @@ export class Game extends Scene {
     // Slingshot bumpers — triangular kickers just above the gutter diagonals,
     // flush against the side walls.  Only the inner hypotenuse face is active.
     const slingshotW = 60;
-    const slingshotH = 140;
+    const slingshotH = 120;
     const onSlingshotHit = () => this.addScore(50);
     new Slingshot(
       this,
       leftWallX + 36,
-      gutterY + slingshotH - 40,
+      gutterY + 82,
       "left",
       slingshotW,
       slingshotH,
+      UPPER_EDGE_ANGLE,
       onSlingshotHit
     );
     new Slingshot(
       this,
       rightWallX - 36,
-      gutterY + slingshotH - 40,
+      gutterY + 82,
       "right",
       slingshotW,
       slingshotH,
+      UPPER_EDGE_ANGLE,
       onSlingshotHit
     );
 

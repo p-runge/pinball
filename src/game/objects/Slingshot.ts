@@ -3,57 +3,115 @@ import { addBodiesFromSvgPath } from "../utils/svgPhysics";
 
 export type SlingshotSide = "left" | "right";
 
-/**
- * How hard the slingshot kicks the ball when the active face is hit.
- * px per Matter normalised-velocity step (same unit as BUMPER_KICK).
- */
 const SLINGSHOT_KICK = 15;
 
 /**
- * Radius of the inscribed corner arcs at the top (B) and inner-bottom (C)
- * vertices.  Larger = smoother corners but shorter active face.
+ * Radius of the inscribed corner arcs at every vertex.
+ * Larger = smoother corners, but shortens the active face.
  */
 const CORNER_R = 10;
 
-/** Physics wall thickness — must match the constant in svgPhysics.ts. */
 const WALL_T = 4;
+
+type Vec2 = { x: number; y: number };
 
 type CollisionEvent = {
   pairs: Array<{ bodyA: MatterJS.BodyType; bodyB: MatterJS.BodyType }>;
 };
 
 /**
+ * Compute the inscribed-circle arc that rounds the corner at vertex V,
+ * where the two adjacent edges run V←prev and V→next.
+ *
+ * Returns:
+ *   tIn   — tangent point on the incoming edge (V←prev side, close to V)
+ *   tOut  — tangent point on the outgoing edge (V→next side, close to V)
+ *   cx/cy — arc centre
+ *   startAngle / endAngle — Phaser arc angles (radians, screen-y-down)
+ *   anticlockwise — Phaser arc direction flag (true = CCW in screen space)
+ *   svgSweep — SVG arc sweep-flag (0 = CCW, 1 = CW in screen space)
+ */
+function inscribedArc(
+  V: Vec2,
+  prev: Vec2,
+  next: Vec2,
+  r: number
+): {
+  tIn: Vec2;
+  tOut: Vec2;
+  cx: number;
+  cy: number;
+  startAngle: number;
+  endAngle: number;
+  anticlockwise: boolean;
+  svgSweep: 0 | 1;
+} {
+  // Unit vectors pointing AWAY from V along each edge
+  const len1 = Math.hypot(prev.x - V.x, prev.y - V.y);
+  const len2 = Math.hypot(next.x - V.x, next.y - V.y);
+  const u1 = { x: (prev.x - V.x) / len1, y: (prev.y - V.y) / len1 }; // V → prev
+  const u2 = { x: (next.x - V.x) / len2, y: (next.y - V.y) / len2 }; // V → next
+
+  // Interior angle at V
+  const cosA = u1.x * u2.x + u1.y * u2.y;
+  const alpha = Math.acos(Math.max(-1, Math.min(1, cosA)));
+
+  // Distance from V to tangent points along each edge
+  const dt = r / Math.tan(alpha / 2);
+  // Distance from V to circle centre along the bisector
+  const dc = r / Math.sin(alpha / 2);
+
+  // Bisector (into the polygon interior)
+  const bRawX = u1.x + u2.x;
+  const bRawY = u1.y + u2.y;
+  const bLen = Math.hypot(bRawX, bRawY);
+  const bx = bRawX / bLen;
+  const by = bRawY / bLen;
+
+  const cx = V.x + bx * dc;
+  const cy = V.y + by * dc;
+
+  const tIn = { x: V.x + u1.x * dt, y: V.y + u1.y * dt };
+  const tOut = { x: V.x + u2.x * dt, y: V.y + u2.y * dt };
+
+  const startAngle = Math.atan2(tIn.y - cy, tIn.x - cx);
+  const endAngle = Math.atan2(tOut.y - cy, tOut.x - cx);
+
+  // Choose the shorter arc (always < π for a convex corner)
+  const norm = (a: number) =>
+    ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const cwSweep =
+    (norm(endAngle) - norm(startAngle) + 2 * Math.PI) % (2 * Math.PI);
+  const ccwSweep =
+    (norm(startAngle) - norm(endAngle) + 2 * Math.PI) % (2 * Math.PI);
+  const anticlockwise = ccwSweep < cwSweep;
+  const svgSweep: 0 | 1 = anticlockwise ? 0 : 1;
+
+  return { tIn, tOut, cx, cy, startAngle, endAngle, anticlockwise, svgSweep };
+}
+
+/**
  * A triangular "slingshot" bumper — the kind found on real pinball tables
  * just above the flipper gutters.
  *
- * The hypotenuse is split into three parts:
- *   • a small passive arc at vertex B (top-outer corner)
- *   • the straight middle section  ← ACTIVE FACE (triggers kick)
- *   • a small passive arc at vertex C (bottom-inner corner)
+ * All three corners are rounded with inscribed-circle arcs of radius CORNER_R.
+ * Only the straight middle portion of the hypotenuse (the ACTIVE FACE) fires
+ * the kick; the corner arcs and the outer edges are plain passive walls.
  *
- * Only the straight active face fires the kick; grazes against either arc
- * corner are treated as ordinary wall bounces.
- *
- * Corner geometry: each arc is the inscribed circle of radius CORNER_R that
- * is simultaneously tangent to both edges meeting at that vertex.  The
- * tangent points are computed analytically so the physics and visual align
- * exactly.
- *
- * @param x    World x of vertex A — the bottom-outer corner (at the wall).
- * @param y    World y of vertex A.
- * @param side "left" → triangle opens rightward; "right" → opens leftward.
- * @param w    Horizontal width (how far the triangle protrudes inward).
- * @param h    Vertical height (how far it extends upward).
- * @param onHit  Optional callback fired when the active face is struck.
+ * @param x           World x of vertex A — the bottom-outer corner.
+ * @param y           World y of vertex A.
+ * @param side        "left" → opens rightward; "right" → opens leftward.
+ * @param w           Horizontal width (how far the triangle protrudes inward).
+ * @param h           Outer wall height (upward extent of vertex B).
+ * @param bottomAngle Tilt of the bottom edge CA from horizontal (radians, positive
+ *                    = slopes downward going inward).  Pass Math.PI/6 to align
+ *                    with the 30° flipper rest angle.  Defaults to 0.
+ * @param onHit       Optional callback fired when the active face is struck.
  */
 export class Slingshot extends Phaser.GameObjects.Container {
-  /** The straight central portion of the hypotenuse — the only body that fires the kick. */
   private readonly activeFaceBody: MatterJS.BodyType;
-  /** All directly-created segment bodies (for cleanup). */
   private readonly segBodies: MatterJS.BodyType[];
   private readonly onHit: (() => void) | undefined;
-
-  /** Outward normal of the active face, pointing into the playfield. */
   private readonly activeNx: number;
   private readonly activeNy: number;
 
@@ -64,154 +122,135 @@ export class Slingshot extends Phaser.GameObjects.Container {
     side: SlingshotSide,
     w: number,
     h: number,
+    bottomAngle = 0,
     onHit?: () => void
   ) {
     super(scene, x, y);
     this.onHit = onHit;
 
-    const dir = side === "left" ? 1 : -1; // +1 protrudes right, -1 protrudes left
-    const len = Math.hypot(w, h);
+    const dir = side === "left" ? 1 : -1;
     const r = CORNER_R;
 
-    // Outward normal of the hypotenuse B→C (points into the playfield).
-    // Left  (dir=+1): (h, -w)/len  →  right + up  ✓
-    // Right (dir=-1): (-h, -w)/len →  left  + up  ✓
-    this.activeNx = (dir * h) / len;
-    this.activeNy = -w / len;
+    // Triangle vertices
+    // A = outer bottom corner (the anchor, at the channel wall)
+    // B = outer top corner  (directly above A)
+    // C = inner bottom corner (protrudes inward; drops by w·tan(bottomAngle))
+    const A: Vec2 = { x, y };
+    const B: Vec2 = { x, y: y - h };
+    const C: Vec2 = { x: x + dir * w, y: y + w * Math.tan(bottomAngle) };
 
-    // ── Corner-arc geometry ───────────────────────────────────────────────────
-    //
-    // For each corner we inscribe a circle of radius r tangent to both
-    // meeting edges.  The tangent points define the arc endpoints and also
-    // the start/end of every straight wall segment.
-    //
-    // Corner B (top-outer, where AB meets BC):
-    //   Centre: (x + dir·r,  y - h + r·(len+h)/w)
-    //   Tangent on AB:  directly left/right of centre → (x, centreBy)
-    //   Tangent on BC:  centre + r·(dir·h/len, -w/len)
-    const cBx = x + dir * r;
-    const cBy = y - h + (r * (len + h)) / w;
-    // Tangent points on the two edges that meet at B
-    const tAB_B = { x, y: cBy }; // on the outer vertical wall
-    const tBC_B = { x: cBx + (r * dir * h) / len, y: cBy - (r * w) / len }; // on the hypotenuse
+    // Active face normal: outward perpendicular of hypotenuse B→C
+    // Rotate BC direction 90° toward the playfield interior.
+    const BCx = C.x - B.x;
+    const BCy = C.y - B.y;
+    const BClen = Math.hypot(BCx, BCy);
+    // For left slingshot BC goes right+down → CW 90° gives right+up ✓
+    // General: rotate (BCx, BCy) by dir·90° CW in screen = (dir·BCy, -dir·BCx)/len
+    this.activeNx = (dir * BCy) / BClen;
+    this.activeNy = (-dir * BCx) / BClen;
 
-    // Corner C (bottom-inner, where BC meets CA):
-    //   Centre: (x + dir·(w - r·(w+len)/h),  y - r)
-    //   Tangent on BC:  centre + r·(dir·h/len, -w/len)
-    //   Tangent on CA:  directly above centre → (centreC_x, y)
-    const cCx = x + dir * (w - (r * (w + len)) / h);
-    const cCy = y - r;
-    const tBC_C = { x: cCx + (r * dir * h) / len, y: cCy - (r * w) / len }; // on the hypotenuse
-    const tCA_C = { x: cCx, y }; // on the bottom edge
-
-    // Arc sweep direction — left slingshot: CW (increasing angle in screen coords)
-    //                        right slingshot: CCW
-    // SVG sweep flag:  1 = CW,  0 = CCW
-    const svgSweep = side === "left" ? 1 : 0;
-    // Phaser anticlockwise param: true = CCW, false = CW
-    const arcCCW = side === "right";
-
-    // Phaser arc angles (screen coords: 0°=right, 90°=down, 180°=left, 270°=up)
-    //   B-arc start:  π for left (pointing left → tAB_B),  0 for right
-    //   B-arc end  :  atan2(-w, dir·h)  (outward-normal direction of BC)
-    //   C-arc start:  same atan2(-w, dir·h)
-    //   C-arc end  :  π/2 (pointing down → tCA_C)
-    const arcAngleBC = Math.atan2(-w, dir * h); // shared B-end / C-start angle
-    const arcAngleBStart = side === "left" ? Math.PI : 0;
-    const arcAngleCEnd = Math.PI / 2;
-
-    // Helper: world → container-local for graphics calls
-    const lx = (wx: number) => wx - x;
-    const ly = (wy: number) => wy - y;
+    // ── Corner arcs (all three vertices) ─────────────────────────────────────
+    // inscribedArc(V, prev, next) — prev and next are the adjacent vertices in
+    // the polygon traversal order A→B→C→A.
+    const arcB = inscribedArc(B, A, C, r); // corner B: between AB and BC
+    const arcC = inscribedArc(C, B, A, r); // corner C: between BC and CA
+    const arcA = inscribedArc(A, C, B, r); // corner A: between CA and AB
 
     // ── Visual ────────────────────────────────────────────────────────────────
+    const lx = (wx: number) => wx - x;
+    const ly = (wy: number) => wy - y;
     const g = scene.add.graphics();
 
-    // Filled body with rounded corners at B and C
+    // Filled body: start at tIn of corner A (= end of CA edge near A), trace CW
     g.fillStyle(0x546e7a, 1);
     g.beginPath();
-    g.moveTo(lx(x), ly(y)); // vertex A
-    g.lineTo(lx(tAB_B.x), ly(tAB_B.y)); // up the outer wall to arc B start
-    g.arc(lx(cBx), ly(cBy), r, arcAngleBStart, arcAngleBC, arcCCW); // corner B arc → tBC_B
-    g.lineTo(lx(tBC_C.x), ly(tBC_C.y)); // straight active face to arc C start
-    g.arc(lx(cCx), ly(cCy), r, arcAngleBC, arcAngleCEnd, arcCCW); // corner C arc → tCA_C
-    g.lineTo(lx(x), ly(y)); // back to A along bottom
+    g.moveTo(lx(arcA.tIn.x), ly(arcA.tIn.y)); // start: end of CA near A
+    g.arc(
+      lx(arcA.cx),
+      ly(arcA.cy),
+      r,
+      arcA.startAngle,
+      arcA.endAngle,
+      arcA.anticlockwise
+    );
+    g.lineTo(lx(arcB.tIn.x), ly(arcB.tIn.y)); // straight AB to arc B start
+    g.arc(
+      lx(arcB.cx),
+      ly(arcB.cy),
+      r,
+      arcB.startAngle,
+      arcB.endAngle,
+      arcB.anticlockwise
+    );
+    g.lineTo(lx(arcC.tIn.x), ly(arcC.tIn.y)); // straight active face to arc C start
+    g.arc(
+      lx(arcC.cx),
+      ly(arcC.cy),
+      r,
+      arcC.startAngle,
+      arcC.endAngle,
+      arcC.anticlockwise
+    );
     g.closePath();
     g.fillPath();
 
-    // Passive outer edges — subtle grey stroke
+    // Passive outer edges — subtle stroke
     g.lineStyle(2, 0x78909c, 1);
     g.beginPath();
-    g.moveTo(lx(x), ly(y));
-    g.lineTo(lx(tAB_B.x), ly(tAB_B.y));
+    g.moveTo(lx(arcA.tOut.x), ly(arcA.tOut.y)); // AB wall
+    g.lineTo(lx(arcB.tIn.x), ly(arcB.tIn.y));
     g.strokePath();
     g.beginPath();
-    g.moveTo(lx(tCA_C.x), ly(tCA_C.y));
-    g.lineTo(lx(x), ly(y));
+    g.moveTo(lx(arcC.tOut.x), ly(arcC.tOut.y)); // CA wall
+    g.lineTo(lx(arcA.tIn.x), ly(arcA.tIn.y));
     g.strokePath();
 
-    // Active face (straight hypotenuse portion only) — bright accent
+    // Active face — bright accent
     g.lineStyle(4, 0xff8f00, 1);
     g.beginPath();
-    g.moveTo(lx(tBC_B.x), ly(tBC_B.y));
-    g.lineTo(lx(tBC_C.x), ly(tBC_C.y));
+    g.moveTo(lx(arcB.tOut.x), ly(arcB.tOut.y));
+    g.lineTo(lx(arcC.tIn.x), ly(arcC.tIn.y));
     g.strokePath();
 
     this.add(g);
     scene.add.existing(this);
 
     // ── Physics ───────────────────────────────────────────────────────────────
-    // Each straight edge is a thin static rectangle; arcs are approximated by
-    // addBodiesFromSvgPath (which creates multiple segments).  Only the active
-    // face rectangle is stored — it's the sole trigger for the kick.
-
-    const makeSeg = (
-      x1: number,
-      y1: number,
-      x2: number,
-      y2: number,
-      label = "wall"
-    ) =>
+    const makeSeg = (p1: Vec2, p2: Vec2, label = "wall") =>
       scene.matter.add.rectangle(
-        (x1 + x2) / 2,
-        (y1 + y2) / 2,
-        Math.hypot(x2 - x1, y2 - y1),
+        (p1.x + p2.x) / 2,
+        (p1.y + p2.y) / 2,
+        Math.hypot(p2.x - p1.x, p2.y - p1.y),
         WALL_T,
         {
           isStatic: true,
-          angle: Math.atan2(y2 - y1, x2 - x1),
+          angle: Math.atan2(p2.y - p1.y, p2.x - p1.x),
           label,
           friction: 0,
           restitution: 0.4,
         }
       );
 
-    // Outer AB wall (A → tAB_B)
-    const bodyAB = makeSeg(x, y, tAB_B.x, tAB_B.y);
+    const svgArc = (from: Vec2, to: Vec2, sweep: 0 | 1) =>
+      `M${from.x},${from.y} A${r},${r} 0 0,${sweep} ${to.x},${to.y}`;
 
-    // Rounded corner at B — passive arc wall
-    addBodiesFromSvgPath(
-      scene,
-      `M${tAB_B.x},${tAB_B.y} A${r},${r} 0 0,${svgSweep} ${tBC_B.x},${tBC_B.y}`
-    );
+    // AB wall
+    const bodyAB = makeSeg(arcA.tOut, arcB.tIn);
 
-    // Active face — straight central portion of the hypotenuse
-    this.activeFaceBody = makeSeg(
-      tBC_B.x,
-      tBC_B.y,
-      tBC_C.x,
-      tBC_C.y,
-      "slingshot"
-    );
+    // Corner B arc (passive)
+    addBodiesFromSvgPath(scene, svgArc(arcB.tIn, arcB.tOut, arcB.svgSweep));
 
-    // Rounded corner at C — passive arc wall
-    addBodiesFromSvgPath(
-      scene,
-      `M${tBC_C.x},${tBC_C.y} A${r},${r} 0 0,${svgSweep} ${tCA_C.x},${tCA_C.y}`
-    );
+    // Active face (only trigger for the kick)
+    this.activeFaceBody = makeSeg(arcB.tOut, arcC.tIn, "slingshot");
 
-    // Bottom CA wall (tCA_C → A)
-    const bodyCA = makeSeg(tCA_C.x, tCA_C.y, x, y);
+    // Corner C arc (passive)
+    addBodiesFromSvgPath(scene, svgArc(arcC.tIn, arcC.tOut, arcC.svgSweep));
+
+    // CA wall
+    const bodyCA = makeSeg(arcC.tOut, arcA.tIn);
+
+    // Corner A arc (passive)
+    addBodiesFromSvgPath(scene, svgArc(arcA.tIn, arcA.tOut, arcA.svgSweep));
 
     this.segBodies = [bodyAB, this.activeFaceBody, bodyCA];
 
