@@ -10,9 +10,11 @@ type CollisionEvent = {
 
 export class Bumper extends Phaser.GameObjects.Container {
   private readonly physicsBody: MatterJS.BodyType;
+  private readonly onHit: (() => void) | undefined;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, onHit?: () => void) {
     super(scene, x, y);
+    this.onHit = onHit;
 
     const g = scene.add.graphics();
     g.fillStyle(0xffd54f, 1);
@@ -59,5 +61,7 @@ export class Bumper extends Phaser.GameObjects.Container {
       x: ballBody.velocity.x + nx * BUMPER_KICK,
       y: ballBody.velocity.y + ny * BUMPER_KICK,
     });
+
+    this.onHit?.();
   }
 }

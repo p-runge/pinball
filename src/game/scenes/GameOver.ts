@@ -6,8 +6,9 @@ export class GameOver extends Scene {
     super("GameOver");
   }
 
-  create() {
+  create(data: { score?: number }) {
     const { width, height } = this.scale;
+    const score = data?.score ?? 0;
 
     this.add
       .text(width / 2, height / 3, "GAME OVER", {
@@ -16,6 +17,28 @@ export class GameOver extends Scene {
         color: "#ff5555",
         stroke: "#000000",
         strokeThickness: 8,
+        align: "center",
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(width / 2, height / 3 + 54, "SCORE", {
+        fontFamily: "Arial Black",
+        fontSize: 16,
+        color: "#aaaaaa",
+        stroke: "#000000",
+        strokeThickness: 3,
+        align: "center",
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(width / 2, height / 3 + 80, score.toLocaleString(), {
+        fontFamily: "Arial Black",
+        fontSize: 36,
+        color: "#ffd54f",
+        stroke: "#000000",
+        strokeThickness: 6,
         align: "center",
       })
       .setOrigin(0.5);

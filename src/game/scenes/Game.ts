@@ -32,6 +32,7 @@ export class Game extends Scene {
   private rightFlipper!: Flipper;
   private ball!: Ball;
   private ballsText!: Phaser.GameObjects.Text;
+  private scoreText!: Phaser.GameObjects.Text;
   /** Static wall bodies checked each step by the CCD pre-pass. */
   private wallBodies: MatterJS.BodyType[] = [];
   /** Delta (ms) of the current sub-step — shared with the CCD handler. */
@@ -40,6 +41,7 @@ export class Game extends Scene {
   private ballSpawnY = 0;
   private ballsLeft = TOTAL_BALLS;
   private drainQueued = false;
+  private score = 0;
 
   constructor() {
     super("Game");
@@ -48,6 +50,7 @@ export class Game extends Scene {
   create() {
     this.ballsLeft = TOTAL_BALLS;
     this.drainQueued = false;
+    this.score = 0;
 
     const { width, height } = this.scale;
 
@@ -187,9 +190,10 @@ export class Game extends Scene {
     const bumperTopY = top + 220;
     const bumperDx = 42;
     const bumperDy = 68;
-    new Bumper(this, bumperCenterX - bumperDx, bumperTopY);
-    new Bumper(this, bumperCenterX + bumperDx, bumperTopY);
-    new Bumper(this, bumperCenterX, bumperTopY + bumperDy);
+    const onBumperHit = () => this.addScore(100);
+    new Bumper(this, bumperCenterX - bumperDx, bumperTopY, onBumperHit);
+    new Bumper(this, bumperCenterX + bumperDx, bumperTopY, onBumperHit);
+    new Bumper(this, bumperCenterX, bumperTopY + bumperDy, onBumperHit);
 
     // Plunger lane setup.
     // The plunger body (full lane width) acts as the floor of the lane so the
@@ -224,16 +228,47 @@ export class Game extends Scene {
       { isStatic: true, isSensor: true, label: "drain-sensor" }
     );
 
-    this.ballsText = this.add
-      .text(right + 24, top + 10, "", {
+    this.add
+      .text(right + 24, top + 10, "BALLS", {
         fontFamily: "Arial Black",
-        fontSize: 20,
+        fontSize: 14,
+        color: "#aaaaaa",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0, 0);
+
+    this.ballsText = this.add
+      .text(right + 24, top + 28, "", {
+        fontFamily: "Arial Black",
+        fontSize: 26,
         color: "#ffffff",
         stroke: "#000000",
         strokeThickness: 4,
       })
       .setOrigin(0, 0);
     this.updateBallsText();
+
+    this.add
+      .text(right + 24, top + 70, "SCORE", {
+        fontFamily: "Arial Black",
+        fontSize: 14,
+        color: "#aaaaaa",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0, 0);
+
+    this.scoreText = this.add
+      .text(right + 24, top + 88, "", {
+        fontFamily: "Arial Black",
+        fontSize: 26,
+        color: "#ffd54f",
+        stroke: "#000000",
+        strokeThickness: 4,
+      })
+      .setOrigin(0, 0);
+    this.updateScoreText();
 
     // Keyboard controls — key events fire immediately on press/release,
     // before the next update() frame, giving instant flipper response.
@@ -272,8 +307,17 @@ export class Game extends Scene {
     this.ball = new Ball(this, this.ballSpawnX, this.ballSpawnY);
   }
 
+  private addScore(points: number): void {
+    this.score += points;
+    this.updateScoreText();
+  }
+
   private updateBallsText(): void {
-    this.ballsText.setText(`BALLS: ${this.ballsLeft}`);
+    this.ballsText.setText(this.ballsLeft.toLocaleString());
+  }
+
+  private updateScoreText(): void {
+    this.scoreText.setText(this.score.toLocaleString());
   }
 
   private onCollisionStart(event: CollisionEvent): void {
@@ -305,7 +349,7 @@ export class Game extends Scene {
       this.updateBallsText();
 
       if (this.ballsLeft <= 0) {
-        this.scene.start("GameOver");
+        this.scene.start("GameOver", { score: this.score });
         return;
       }
 
