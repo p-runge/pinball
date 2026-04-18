@@ -4,8 +4,9 @@ import { Ball, BALL_RADIUS } from "../objects/Ball";
 import { Bumper } from "../objects/Bumper";
 import { Flipper } from "../objects/Flipper";
 import { Plunger, PLUNGER_BODY_H } from "../objects/Plunger";
-import { addBodiesFromSvgPath } from "../utils/svgPhysics";
+import { Slingshot } from "../objects/Slingshot";
 import { sweptCircleVsConvex, sweptConvexVsCircle } from "../utils/ccd";
+import { addBodiesFromSvgPath } from "../utils/svgPhysics";
 
 // Thickness used for all straight wall segments (and the minimum across curved
 // ones).
@@ -187,6 +188,30 @@ export class Game extends Scene {
     // Flippers
     this.leftFlipper = new Flipper(this, gutterInnerLeft, flipperY, "left");
     this.rightFlipper = new Flipper(this, gutterInnerRight, flipperY, "right");
+
+    // Slingshot bumpers — triangular kickers just above the gutter diagonals,
+    // flush against the side walls.  Only the inner hypotenuse face is active.
+    const slingshotW = 50;
+    const slingshotH = 80;
+    const onSlingshotHit = () => this.addScore(50);
+    new Slingshot(
+      this,
+      left + 80,
+      gutterY,
+      "left",
+      slingshotW,
+      slingshotH,
+      onSlingshotHit
+    );
+    new Slingshot(
+      this,
+      plungerSep - 80,
+      gutterY,
+      "right",
+      slingshotW,
+      slingshotH,
+      onSlingshotHit
+    );
 
     const bumperCenterX = (left + plungerSep) / 2;
     const bumperTopY = top + 220;
