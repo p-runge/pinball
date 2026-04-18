@@ -29,7 +29,10 @@ function distSqToSegment(
     const dy = py - ay;
     return dx * dx + dy * dy;
   }
-  const t = Math.max(0, Math.min(1, ((px - ax) * abx + (py - ay) * aby) / lenSq));
+  const t = Math.max(
+    0,
+    Math.min(1, ((px - ax) * abx + (py - ay) * aby) / lenSq)
+  );
   const cx = ax + abx * t;
   const cy = ay + aby * t;
   const dx = px - cx;
@@ -103,9 +106,12 @@ export class Slingshot extends Phaser.GameObjects.Container {
     // Filled triangle body
     g.fillStyle(0x546e7a, 1); // blue-grey fill
     g.fillTriangle(
-      this.vA.x - x, this.vA.y - y,
-      this.vB.x - x, this.vB.y - y,
-      this.vC.x - x, this.vC.y - y
+      this.vA.x - x,
+      this.vA.y - y,
+      this.vB.x - x,
+      this.vB.y - y,
+      this.vC.x - x,
+      this.vC.y - y
     );
 
     // Passive edges (outer legs) — subtle grey
@@ -176,9 +182,30 @@ export class Slingshot extends Phaser.GameObjects.Container {
     const bx = ballBody.position.x;
     const by = ballBody.position.y;
 
-    const dAB = distSqToSegment(bx, by, this.vA.x, this.vA.y, this.vB.x, this.vB.y);
-    const dAC = distSqToSegment(bx, by, this.vA.x, this.vA.y, this.vC.x, this.vC.y);
-    const dBC = distSqToSegment(bx, by, this.vB.x, this.vB.y, this.vC.x, this.vC.y);
+    const dAB = distSqToSegment(
+      bx,
+      by,
+      this.vA.x,
+      this.vA.y,
+      this.vB.x,
+      this.vB.y
+    );
+    const dAC = distSqToSegment(
+      bx,
+      by,
+      this.vA.x,
+      this.vA.y,
+      this.vC.x,
+      this.vC.y
+    );
+    const dBC = distSqToSegment(
+      bx,
+      by,
+      this.vB.x,
+      this.vB.y,
+      this.vC.x,
+      this.vC.y
+    );
 
     // Only kick if the active face (B→C) is closest.
     if (dBC > dAB || dBC > dAC) return;

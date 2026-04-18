@@ -2,7 +2,7 @@ import Phaser from "phaser";
 
 export type FlipperSide = "left" | "right";
 
-const LENGTH = 90;
+const LENGTH = 70;
 const HALF_THICK = 10;
 const HALF_THIN = 5;
 

@@ -67,13 +67,46 @@ export class Game extends Scene {
     const plungerSep = right - 36; // separator between playfield and plunger lane
     const plungerEntryY = 200; // where ball can enter playfield from plunger lane
 
-    // Bottom gutter diagonal start (where side walls angle inward)
+    // Y at which the lower channel zone begins
     const gutterY = bottom - 200;
-    const gutterInnerLeft = left + 90; // where left gutter meets flipper level
-    const gutterInnerRight = plungerSep - 90; // where right gutter meets flipper level
+
+    // Flipper pivot X positions — moved 6 px inward from the outer walls to
+    // narrow the central gap slightly (was left+90 / plungerSep-90).
+    const gutterInnerLeft = left + 96;
+    const gutterInnerRight = plungerSep - 96;
 
     // Flipper pivot points (outer ends, fixed to the gutter walls)
     const flipperY = bottom - 60;
+
+    // ── Lower-zone geometry ─────────────────────────────────────────────────
+    // Each channel wall runs vertically, then transitions via a 60° arc to the
+    // flipper rest angle (30° below horizontal), then a straight wall at that
+    // same angle leads directly to the flipper pivot.
+    //
+    // Arc geometry (left side):
+    //   Center at (leftWallX + R, arcStartY).  Sweeps CCW from θ=180° (start,
+    //   tangent=downward) to θ=120° (end, tangent=30° below horizontal).
+    //   End point: (leftWallX + R/2, arcStartY + R·√3/2)
+    //
+    // Tangent constraint — for the straight wall from arc end to reach the
+    // flipper pivot at 30°:  arcStartY = flipperY − (D + R) / √3
+    //   where D = gutterInnerLeft − leftWallX (horizontal distance wall→pivot)
+    const LANE_WALL_OFFSET = 36; // px from the outer wall to the channel wall
+    const LOWER_CORNER_R = 30; // arc radius; controls how "tight" the curve is
+
+    // World-space X of the channel wall on each side
+    const leftWallX = left + LANE_WALL_OFFSET;
+    const rightWallX = plungerSep - LANE_WALL_OFFSET;
+
+    // Horizontal distance from channel wall to flipper pivot (same on both sides)
+    const laneD = gutterInnerLeft - leftWallX;
+
+    // Y where the vertical channel wall ends and the arc begins
+    const arcStartY = flipperY - (laneD + LOWER_CORNER_R) / Math.sqrt(3);
+
+    // Arc end-point offsets (R·cos60°, R·sin60°), mirrored on X for right side
+    const arcEndDx = LOWER_CORNER_R / 2;
+    const arcEndDy = (LOWER_CORNER_R * Math.sqrt(3)) / 2;
 
     const CORNER_R = 60; // radius of the top-corner inlay arcs
 
@@ -121,15 +154,39 @@ export class Game extends Scene {
     g.lineTo(right, plungerEntryY);
     g.strokePath();
 
-    // Left gutter diagonal
+    // ── Left channel wall + 60° arc + angled connector ──────────────────────
     g.beginPath();
-    g.moveTo(left, gutterY);
+    g.moveTo(leftWallX, gutterY);
+    // Vertical wall from gutterY down to the arc start
+    g.lineTo(leftWallX, arcStartY);
+    // 60° CCW arc: center at (leftWallX+R, arcStartY), from θ=180° to θ=120°.
+    // End tangent matches the flipper rest angle (30° below horizontal).
+    g.arc(
+      leftWallX + LOWER_CORNER_R,
+      arcStartY,
+      LOWER_CORNER_R,
+      Math.PI, // θ=180°: start = (leftWallX, arcStartY)
+      (2 * Math.PI) / 3, // θ=120°: end tangent = 30° below horizontal
+      true // anticlockwise = decreasing angle
+    );
+    // Straight wall at 30° slope from arc end to left flipper pivot
     g.lineTo(gutterInnerLeft, flipperY);
     g.strokePath();
 
-    // Right gutter diagonal
+    // ── Right channel wall + 60° arc + angled connector ─────────────────────
     g.beginPath();
-    g.moveTo(plungerSep, gutterY);
+    g.moveTo(rightWallX, gutterY);
+    g.lineTo(rightWallX, arcStartY);
+    // 60° CW arc: center at (rightWallX-R, arcStartY), from θ=0° to θ=60°.
+    g.arc(
+      rightWallX - LOWER_CORNER_R,
+      arcStartY,
+      LOWER_CORNER_R,
+      0, // θ=0°: start = (rightWallX, arcStartY)
+      Math.PI / 3, // θ=60°: end tangent = 30° below horizontal (mirrored)
+      false // clockwise = increasing angle
+    );
+    // Straight wall at 30° slope from arc end to right flipper pivot
     g.lineTo(gutterInnerRight, flipperY);
     g.strokePath();
 
@@ -179,9 +236,34 @@ export class Game extends Scene {
     // Plunger lane separator
     addSeg(plungerSep, plungerEntryY, plungerSep, bottom);
 
-    // Gutter diagonals
-    addSeg(left, gutterY, gutterInnerLeft, flipperY);
-    addSeg(plungerSep, gutterY, gutterInnerRight, flipperY);
+    // ── Lower-zone physics ───────────────────────────────────────────────────
+    // Left: vertical wall → 60° CCW arc → 30°-angled wall to pivot
+    addSeg(leftWallX, gutterY, leftWallX, arcStartY);
+    addBodiesFromSvgPath(
+      this,
+      // sweep-flag=0 (CCW): from (leftWallX, arcStartY) to arc end at 120°
+      `M${leftWallX},${arcStartY} A${LOWER_CORNER_R},${LOWER_CORNER_R} 0 0,0 ${leftWallX + arcEndDx},${arcStartY + arcEndDy}`
+    );
+    addSeg(
+      leftWallX + arcEndDx,
+      arcStartY + arcEndDy,
+      gutterInnerLeft,
+      flipperY
+    );
+
+    // Right: vertical wall → 60° CW arc → 30°-angled wall to pivot
+    addSeg(rightWallX, gutterY, rightWallX, arcStartY);
+    addBodiesFromSvgPath(
+      this,
+      // sweep-flag=1 (CW): from (rightWallX, arcStartY) to arc end at 60°
+      `M${rightWallX},${arcStartY} A${LOWER_CORNER_R},${LOWER_CORNER_R} 0 0,1 ${rightWallX - arcEndDx},${arcStartY + arcEndDy}`
+    );
+    addSeg(
+      rightWallX - arcEndDx,
+      arcStartY + arcEndDy,
+      gutterInnerRight,
+      flipperY
+    );
 
     // ── Game objects ─────────────────────────────────────────────────────────
 
@@ -191,13 +273,13 @@ export class Game extends Scene {
 
     // Slingshot bumpers — triangular kickers just above the gutter diagonals,
     // flush against the side walls.  Only the inner hypotenuse face is active.
-    const slingshotW = 50;
+    const slingshotW = 40;
     const slingshotH = 80;
     const onSlingshotHit = () => this.addScore(50);
     new Slingshot(
       this,
-      left + 80,
-      gutterY,
+      leftWallX + 36,
+      gutterY + slingshotH,
       "left",
       slingshotW,
       slingshotH,
@@ -205,8 +287,8 @@ export class Game extends Scene {
     );
     new Slingshot(
       this,
-      plungerSep - 80,
-      gutterY,
+      rightWallX - 36,
+      gutterY + slingshotH,
       "right",
       slingshotW,
       slingshotH,
