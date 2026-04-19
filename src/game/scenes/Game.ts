@@ -9,6 +9,7 @@ import {
   FLIPPER_LENGTH,
   FLIPPER_REST_ANGLE_DEG,
 } from "../objects/Flipper";
+import { OneWayGate } from "../objects/OneWayGate";
 import { Plunger, PLUNGER_BODY_H } from "../objects/Plunger";
 import { Slingshot } from "../objects/Slingshot";
 import { sweptCircleVsConvex, sweptConvexVsCircle } from "../utils/ccd";
@@ -400,6 +401,19 @@ export class Game extends Scene {
       plungerEntryY, // top of sensor = lane entry
       right + 32, // charge bar X
       bottom - 10 // charge bar bottom Y
+    );
+
+    // One-way gate at the top of the plunger-lane separator (x = plungerSep).
+    // The ball may exit the plunger lane (travel leftward into the playfield)
+    // but cannot re-enter it from the playfield (travel rightward).
+    new OneWayGate(
+      this,
+      plungerSep,
+      plungerEntryY,
+      plungerSep + 36,
+      plungerEntryY - 36,
+      1, // ball may cross from bottom right (plunger lane)
+      () => this.ball ?? null
     );
 
     // Drain sensor just below the table opening. Falling through it consumes
