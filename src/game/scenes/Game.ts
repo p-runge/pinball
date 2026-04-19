@@ -127,6 +127,15 @@ export class Game extends Scene {
 
     const CORNER_R = 60; // radius of the top-corner inlay arcs
 
+    // Protective arc radius — covers the outer portion of the gutter lane so
+    // that a ball falling straight down gets deflected inward toward the flippers.
+    // Smaller than LANE_WALL_OFFSET so the arc only covers the outer gutter lane
+    // and a ball from the centre can still sneak through the uncovered gap.
+    const PROTECT_R = 120;
+    const PROTECT_ARC_END_DX = PROTECT_R * (1 - Math.SQRT1_2);
+    const PROTECT_ARC_END_DY = PROTECT_R * Math.SQRT1_2;
+    const protectY = gutterY - PROTECT_R - 12; // Y of the protective arc centres, above the gutter floor
+
     // ── Graphics ────────────────────────────────────────────────────────────
     const g = this.add.graphics();
     g.lineStyle(3, 0xcccccc, 1);
@@ -206,6 +215,40 @@ export class Game extends Scene {
     g.lineTo(gutterInnerRight, flipperY);
     g.strokePath();
 
+    // ── Protective gutter arcs ───────────────────────────────────────────────
+    // An eighth-circle arc sits at the entrance of each outer gutter lane.
+    // Its convex face points up-inward, deflecting balls falling into the outer
+    // portion of the lane back toward the flippers while still leaving a gap
+    // near the channel wall so a ball from the centre can reach the gutter.
+    //
+    // Left: centre at (left + PROTECT_R, gutterY − PROTECT_R)
+    //   from (left, gutterY − PROTECT_R) CCW to the 45° end point above the
+    //   gutter floor at (left + PROTECT_ARC_END_DX, gutterY - PROTECT_R + PROTECT_ARC_END_DY)
+    g.beginPath();
+    g.arc(
+      left + PROTECT_R,
+      protectY,
+      PROTECT_R,
+      Math.PI, // start: pointing left → (left, gutterY − PROTECT_R)
+      (Math.PI * 3) / 4, // end:   45° CCW from left
+      true // anticlockwise (decreasing angle = CCW in Phaser)
+    );
+    g.strokePath();
+
+    // Right: centre at (plungerSep − PROTECT_R, gutterY − PROTECT_R)
+    //   from (plungerSep, gutterY − PROTECT_R) CW to the 45° end point above
+    //   the gutter floor at (plungerSep - PROTECT_ARC_END_DX, gutterY - PROTECT_R + PROTECT_ARC_END_DY)
+    g.beginPath();
+    g.arc(
+      plungerSep - PROTECT_R,
+      protectY,
+      PROTECT_R,
+      0, // start: pointing right → (plungerSep, gutterY − PROTECT_R)
+      Math.PI / 4, // end:   45° CW from right
+      false // clockwise (increasing angle = CW in Phaser)
+    );
+    g.strokePath();
+
     // ── Physics ─────────────────────────────────────────────────────────────
 
     // Add a static segment body between two world-space points.
@@ -279,6 +322,20 @@ export class Game extends Scene {
       arcStartY + arcEndDy,
       gutterInnerRight,
       flipperY
+    );
+
+    // ── Protective gutter arc physics ─────────────────────────────────────────
+    // Left: CCW eighth-circle (sweep-flag=0) from outer wall toward the gutter.
+    // The convex face (outside of the curve) faces up-right, deflecting balls
+    // that fall into the outer lane back toward the flippers.
+    addBodiesFromSvgPath(
+      this,
+      `M${left},${protectY} A${PROTECT_R},${PROTECT_R} 0 0,0 ${left + PROTECT_ARC_END_DX},${protectY + PROTECT_ARC_END_DY}`
+    );
+    // Right: CW eighth-circle (sweep-flag=1) mirrored on the plunger separator.
+    addBodiesFromSvgPath(
+      this,
+      `M${plungerSep},${protectY} A${PROTECT_R},${PROTECT_R} 0 0,1 ${plungerSep - PROTECT_ARC_END_DX},${protectY + PROTECT_ARC_END_DY}`
     );
 
     // ── Game objects ─────────────────────────────────────────────────────────
