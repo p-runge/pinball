@@ -254,11 +254,12 @@ export class Slingshot extends Phaser.GameObjects.Container {
 
     this.segBodies = [bodyAB, this.activeFaceBody, bodyCA];
 
-    scene.matter.world.on("collisionstart", this.onCollisionStart, this);
+    const world = scene.matter.world;
+    world.on("collisionstart", this.onCollisionStart, this);
     this.once("destroy", () => {
-      scene.matter.world.off("collisionstart", this.onCollisionStart, this);
+      world.off("collisionstart", this.onCollisionStart, this);
       for (const body of this.segBodies) {
-        scene.matter.world.remove(body);
+        world.remove(body);
       }
     });
   }

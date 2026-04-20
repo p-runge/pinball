@@ -84,10 +84,11 @@ export class DropTarget {
     this.g = scene.add.graphics();
     this.draw(false);
 
-    scene.matter.world.on("collisionstart", this.onCollisionStart, this);
+    const world = scene.matter.world;
+    world.on("collisionstart", this.onCollisionStart, this);
     scene.events.once("shutdown", () => {
-      scene.matter.world.off("collisionstart", this.onCollisionStart, this);
-      scene.matter.world.remove(this.physicsBody);
+      world.off("collisionstart", this.onCollisionStart, this);
+      world.remove(this.physicsBody);
     });
   }
 

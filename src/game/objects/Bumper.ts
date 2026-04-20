@@ -33,10 +33,11 @@ export class Bumper extends Phaser.GameObjects.Container {
       restitution: 1,
     });
 
-    scene.matter.world.on("collisionstart", this.onCollisionStart, this);
+    const world = scene.matter.world;
+    world.on("collisionstart", this.onCollisionStart, this);
     this.once("destroy", () => {
-      scene.matter.world.off("collisionstart", this.onCollisionStart, this);
-      scene.matter.world.remove(this.physicsBody);
+      world.off("collisionstart", this.onCollisionStart, this);
+      world.remove(this.physicsBody);
     });
   }
 

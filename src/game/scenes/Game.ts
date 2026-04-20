@@ -42,6 +42,7 @@ export class Game extends Scene {
     this.drainQueued = false;
     this.score = 0;
     this.scoreMultiplier = 1;
+    this.multiplierTimer = null;
 
     const { width, height } = this.scale;
     const layout = computeTableLayout(width, height);
@@ -201,7 +202,10 @@ export class Game extends Scene {
   private deactivateMultiplier(): void {
     this.scoreMultiplier = 1;
     this.multiplierText.setText("1×").setColor("#888888");
-    this.multiplierTimer = null;
+    if (this.multiplierTimer) {
+      this.multiplierTimer.remove();
+      this.multiplierTimer = null;
+    }
   }
 
   private updateBallsText(): void {
@@ -240,15 +244,14 @@ export class Game extends Scene {
       this.ballsLeft -= 1;
       this.updateBallsText();
 
-      // Reset per-ball state
-      this.deactivateMultiplier();
-      this.resetRolloverLanes();
-
       if (this.ballsLeft <= 0) {
         this.scene.start("GameOver", { score: this.score });
         return;
       }
 
+      // Reset per-ball state before spawning the next ball.
+      this.deactivateMultiplier();
+      this.resetRolloverLanes();
       this.spawnBall();
       this.drainQueued = false;
     });
