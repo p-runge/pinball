@@ -2,6 +2,7 @@ import { Game as PinballGame } from "./scenes/Game";
 import { GameOver } from "./scenes/GameOver";
 import { MainMenu } from "./scenes/MainMenu";
 import { AUTO, Game, Scale } from "phaser";
+import { GRAVITY_Y } from "./layout/constants";
 import { env } from "../env";
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -17,7 +18,7 @@ const config: Phaser.Types.Core.GameConfig = {
   physics: {
     default: "matter",
     matter: {
-      gravity: { x: 0, y: 1 },
+      gravity: { x: 0, y: GRAVITY_Y },
       // Set debug: true to visualise collision shapes during development
       debug: env.VITE_DEBUG,
     },
