@@ -1,6 +1,6 @@
 import { desc } from "drizzle-orm";
-import { db } from "../db";
-import { highscores } from "../db/schema";
+import { db } from "../db/index.js";
+import { highscores } from "../db/schema.js";
 
 export type Highscore = {
   id: number;

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { addHighscore, getHighscores } from "./api/highscores";
+import { addHighscore, getHighscores } from "./api/highscores.js";
 
 export const app = new Hono();
 
