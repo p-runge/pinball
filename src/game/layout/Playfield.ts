@@ -24,6 +24,8 @@ export interface PlayfieldResult {
    * player has to re-light them every ball.
    */
   resetRolloverLanes: () => void;
+  /** Update the lit colour of the rollover lanes (e.g. to preview the next multiplier level). */
+  setRolloverLitColor: (hexColor: number) => void;
 }
 
 /**
@@ -68,7 +70,12 @@ export function setupPlayfield(
     (x) =>
       new RolloverLane(scene, x, laneY, LANE_W, () => {
         litCount += 1;
-        if (litCount === 3) onAllRolloversLit();
+        if (litCount === 3) {
+          onAllRolloversLit();
+          // Reset immediately so the player can go for the next level.
+          litCount = 0;
+          rollovers.forEach((r) => r.reset());
+        }
       })
   );
 
@@ -147,6 +154,9 @@ export function setupPlayfield(
     resetRolloverLanes: () => {
       litCount = 0;
       rollovers.forEach((lane) => lane.reset());
+    },
+    setRolloverLitColor: (hexColor: number) => {
+      rollovers.forEach((lane) => lane.setLitColor(hexColor));
     },
   };
 }

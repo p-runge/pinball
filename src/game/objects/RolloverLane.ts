@@ -2,7 +2,7 @@ import Phaser from "phaser";
 
 const LANE_H = 8; // visual + physics height of the sensor strip
 const COLOR_UNLIT = 0x334455;
-const COLOR_LIT = 0x00e5ff;
+const DEFAULT_LIT_COLOR = 0x00e5ff;
 
 type CollisionEvent = {
   pairs: Array<{ bodyA: MatterJS.BodyType; bodyB: MatterJS.BodyType }>;
@@ -22,9 +22,14 @@ export class RolloverLane {
   private readonly g: Phaser.GameObjects.Graphics;
   private readonly onLit: () => void;
   private _isLit = false;
+  private litColor = DEFAULT_LIT_COLOR;
 
   get isLit(): boolean {
     return this._isLit;
+  }
+
+  setLitColor(color: number): void {
+    this.litColor = color;
   }
 
   constructor(
@@ -87,7 +92,7 @@ export class RolloverLane {
   }
 
   private drawLane(cx: number, cy: number, width: number, lit: boolean): void {
-    const color = lit ? COLOR_LIT : COLOR_UNLIT;
+    const color = lit ? this.litColor : COLOR_UNLIT;
     const alpha = lit ? 1 : 0.6;
     this.g.fillStyle(color, alpha);
     this.g.fillRect(cx - width / 2, cy - LANE_H / 2, width, LANE_H);

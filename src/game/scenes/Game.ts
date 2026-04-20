@@ -11,6 +11,17 @@ import { setupPlayfield } from "../layout/Playfield";
 import { CcdHandler } from "../physics/CcdHandler";
 
 const TOTAL_BALLS = 3;
+const MAX_MULTIPLIER = 5;
+
+// Colour for each multiplier level — used by both the HUD text and the
+// rollover-lane lit colour (which previews the *next* level the player is aiming for).
+const MULTIPLIER_COLORS: Record<number, { hex: number; css: string }> = {
+  1: { hex: 0x888888, css: "#888888" },
+  2: { hex: 0x00e5ff, css: "#00e5ff" },
+  3: { hex: 0x69f0ae, css: "#69f0ae" },
+  4: { hex: 0xffab40, css: "#ffab40" },
+  5: { hex: 0xff1744, css: "#ff1744" },
+};
 
 type CollisionEvent = {
   pairs: Array<{ bodyA: MatterJS.BodyType; bodyB: MatterJS.BodyType }>;
@@ -29,8 +40,8 @@ export class Game extends Scene {
   private drainQueued = false;
   private score = 0;
   private scoreMultiplier = 1;
-  private multiplierTimer: Phaser.Time.TimerEvent | null = null;
   private resetRolloverLanes!: () => void;
+  private setRolloverLitColor!: (hex: number) => void;
   private ccdHandler!: CcdHandler;
 
   constructor() {
@@ -42,7 +53,6 @@ export class Game extends Scene {
     this.drainQueued = false;
     this.score = 0;
     this.scoreMultiplier = 1;
-    this.multiplierTimer = null;
 
     const { width, height } = this.scale;
     const layout = computeTableLayout(width, height);
@@ -66,14 +76,19 @@ export class Game extends Scene {
     this.rightFlipper = rightFlipper;
 
     // ── Playfield elements ─────────────────────────────────────────────────────
-    const { resetRolloverLanes } = setupPlayfield(this, layout, {
-      onBumperHit: () => this.addScore(100),
-      onAllRolloversLit: () => this.activateMultiplier(),
-      onDropTargetHit: () => this.addScore(150),
-      onDropBankCleared: () => this.addScore(1000),
-      onStandupHit: () => this.addScore(200),
-    });
+    const { resetRolloverLanes, setRolloverLitColor } = setupPlayfield(
+      this,
+      layout,
+      {
+        onBumperHit: () => this.addScore(100),
+        onAllRolloversLit: () => this.increaseMultiplier(),
+        onDropTargetHit: () => this.addScore(150),
+        onDropBankCleared: () => this.addScore(1000),
+        onStandupHit: () => this.addScore(200),
+      }
+    );
     this.resetRolloverLanes = resetRolloverLanes;
+    this.setRolloverLitColor = setRolloverLitColor;
 
     this.spawnBall();
 
@@ -140,6 +155,9 @@ export class Game extends Scene {
       })
       .setOrigin(0, 0);
 
+    // Lanes preview the next multiplier level — at start that's 2×.
+    this.setRolloverLitColor(MULTIPLIER_COLORS[2].hex);
+
     // ── Keyboard controls ──────────────────────────────────────────────────────
     // Key events fire immediately on press/release, before the next update()
     // frame, giving instant flipper response.
@@ -190,22 +208,24 @@ export class Game extends Scene {
     this.updateScoreText();
   }
 
-  private activateMultiplier(): void {
-    this.scoreMultiplier = 2;
-    this.multiplierText.setText("2×").setColor("#00e5ff");
-    if (this.multiplierTimer) this.multiplierTimer.remove();
-    this.multiplierTimer = this.time.delayedCall(15000, () =>
-      this.deactivateMultiplier()
-    );
+  private increaseMultiplier(): void {
+    this.scoreMultiplier = Math.min(this.scoreMultiplier + 1, MAX_MULTIPLIER);
+    this.updateMultiplierUI();
   }
 
-  private deactivateMultiplier(): void {
+  private resetMultiplier(): void {
     this.scoreMultiplier = 1;
-    this.multiplierText.setText("1×").setColor("#888888");
-    if (this.multiplierTimer) {
-      this.multiplierTimer.remove();
-      this.multiplierTimer = null;
-    }
+    this.updateMultiplierUI();
+  }
+
+  private updateMultiplierUI(): void {
+    const current = MULTIPLIER_COLORS[this.scoreMultiplier];
+    this.multiplierText
+      .setText(`${this.scoreMultiplier}×`)
+      .setColor(current.css);
+    // Lanes preview the next level; at max they stay at the max colour.
+    const nextLevel = Math.min(this.scoreMultiplier + 1, MAX_MULTIPLIER);
+    this.setRolloverLitColor(MULTIPLIER_COLORS[nextLevel].hex);
   }
 
   private updateBallsText(): void {
@@ -250,7 +270,7 @@ export class Game extends Scene {
       }
 
       // Reset per-ball state before spawning the next ball.
-      this.deactivateMultiplier();
+      this.resetMultiplier();
       this.resetRolloverLanes();
       this.spawnBall();
       this.drainQueued = false;
