@@ -8,7 +8,16 @@ export default tseslint.config(
   { ignores: ["dist", ".eslintrc.cjs"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    files: ["server/**/*.ts", "drizzle.config.ts"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.node,
+    },
+  },
+  {
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
+    ignores: ["server/**/*.ts", "drizzle.config.ts"],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,

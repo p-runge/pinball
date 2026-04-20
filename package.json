@@ -21,26 +21,37 @@
     "typescript"
   ],
   "scripts": {
-    "dev": "node log.js dev & vite --config vite/config.dev.mjs",
+    "dev": "node log.js dev & NODE_ENV=development tsx server/index.ts & vite --config vite/config.dev.mjs",
     "build": "node log.js build & vite build --config vite/config.prod.mjs",
-    "dev-nolog": "vite --config vite/config.dev.mjs",
+    "start": "tsx server/index.ts",
+    "dev-nolog": "NODE_ENV=development tsx server/index.ts & vite --config vite/config.dev.mjs",
     "build-nolog": "vite build --config vite/config.prod.mjs",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
     "format": "prettier --write . --log-level silent",
     "lint:fix": "eslint . --fix",
-    "check": "tsc --noEmit && pnpm lint:fix && pnpm format"
+    "check": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit && pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.14",
     "@t3-oss/env-core": "^0.13.11",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.14",
     "phaser": "^3.90.0",
+    "postgres": "^3.4.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "tsx": "^4.21.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9.22.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
