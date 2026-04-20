@@ -9,6 +9,7 @@ import {
   FLIPPER_LENGTH,
   FLIPPER_REST_ANGLE_DEG,
 } from "../objects/Flipper";
+import { CenterPost } from "../objects/CenterPost";
 import { OneWayGate } from "../objects/OneWayGate";
 import { Plunger, PLUNGER_BODY_H } from "../objects/Plunger";
 import { Slingshot } from "../objects/Slingshot";
@@ -344,6 +345,12 @@ export class Game extends Scene {
     // Flippers
     this.leftFlipper = new Flipper(this, gutterInnerLeft, flipperY, "left");
     this.rightFlipper = new Flipper(this, gutterInnerRight, flipperY, "right");
+
+    // Center post — passive peg in the middle of the flipper gap.
+    // Deflects a ball falling straight down the center back toward a flipper.
+    const centerPostX = (gutterInnerLeft + gutterInnerRight) / 2;
+    const centerPostY = bottom + 10;
+    new CenterPost(this, centerPostX, centerPostY);
 
     // Slingshot bumpers — triangular kickers just above the gutter diagonals,
     // flush against the side walls.  Only the inner hypotenuse face is active.
