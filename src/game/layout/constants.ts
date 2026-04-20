@@ -33,8 +33,8 @@ export const GRAVITY_Y = G * Math.sin((TABLE_ANGLE_DEG * Math.PI) / 180);
  * Both values are also used directly as pixel measurements, so the render
  * scale is 1 px = 1 mm → PX_PER_M = 1000.
  */
-export const TABLE_W = 690;
-export const TABLE_H = 1070;
+export const TABLE_W = 550;
+export const TABLE_H = 1200;
 
 /** Ball launch speed at full plunger charge, in m/s. */
 export const TARGET_LAUNCH_SPEED_MS = 3.5;

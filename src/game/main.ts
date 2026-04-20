@@ -1,9 +1,9 @@
+import { AUTO, Game, Scale } from "phaser";
+import { env } from "../env";
+import { GRAVITY_Y, TABLE_H, TABLE_W } from "./layout/constants";
 import { Game as PinballGame } from "./scenes/Game";
 import { GameOver } from "./scenes/GameOver";
 import { MainMenu } from "./scenes/MainMenu";
-import { AUTO, Game, Scale } from "phaser";
-import { GRAVITY_Y } from "./layout/constants";
-import { env } from "../env";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: AUTO,
@@ -12,8 +12,8 @@ const config: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Scale.FIT,
     autoCenter: Scale.CENTER_BOTH,
-    width: 1024,
-    height: 1160,
+    width: TABLE_W + 2 * 150,
+    height: TABLE_H + 2 * 40,
   },
   physics: {
     default: "matter",

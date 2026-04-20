@@ -165,7 +165,7 @@ export function setupGutter(
   new Slingshot(
     scene,
     leftWallX + LANE_WIDTH,
-    gutterY + 62,
+    gutterY + 42,
     "left",
     slingshotW,
     slingshotH,
@@ -175,7 +175,7 @@ export function setupGutter(
   new Slingshot(
     scene,
     rightWallX - LANE_WIDTH,
-    gutterY + 62,
+    gutterY + 42,
     "right",
     slingshotW,
     slingshotH,

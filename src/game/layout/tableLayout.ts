@@ -1,3 +1,4 @@
+import { BALL_RADIUS } from "../objects/Ball";
 import {
   FLIPPER_HALF_THICK,
   FLIPPER_HALF_THIN,
@@ -62,23 +63,24 @@ export function computeTableLayout(width: number, height: number): TableLayout {
   const plungerSep = right - LANE_WIDTH; // separator between playfield and plunger lane
   const plungerEntryY = 200; // Y where the ball can enter the playfield
 
+  const centerX = (left + plungerSep) / 2;
+
   // Y at which the lower channel zone begins
   const gutterY = bottom - 200;
 
   // Flipper pivot X positions — moved 6 px inward from the outer walls to
   // narrow the central gap slightly.
-  const gutterInnerLeft = left + 206;
-  const gutterInnerRight = plungerSep - 206;
+  const gutterInnerLeft = centerX - FLIPPER_LENGTH - 2 * BALL_RADIUS;
+  const gutterInnerRight = centerX + FLIPPER_LENGTH + 2 * BALL_RADIUS;
 
   const flipperY = gutterY + 140;
 
-  const LANE_WALL_OFFSET = LANE_WIDTH;
   const LOWER_CORNER_R = 30;
   const CORNER_R = 60;
   const PROTECT_R = 120;
 
-  const leftWallX = left + LANE_WALL_OFFSET;
-  const rightWallX = plungerSep - LANE_WALL_OFFSET;
+  const leftWallX = left + LANE_WIDTH;
+  const rightWallX = plungerSep - LANE_WIDTH;
 
   // Horizontal distance from a channel wall to the flipper pivot
   const laneD = gutterInnerLeft - leftWallX;
