@@ -66,7 +66,7 @@ export const FLIPPER_RESTITUTION = 0.7;
  * Real machines use rubber bands with an inside circumference of 2.0–2.5",
  * giving an active face of roughly 90–110 mm. 100 mm is the practical midpoint.
  */
-export const SLINGSHOT_FACE_MM = 150;
+export const SLINGSHOT_FACE_MM = 180;
 
 /**
  * Angle of the slingshot active face from horizontal (degrees).
@@ -90,3 +90,10 @@ export const SLINGSHOT_FACE_ANGLE_DEG = 70;
 const _faceRad = (SLINGSHOT_FACE_ANGLE_DEG * Math.PI) / 180;
 export const SLINGSHOT_W = SLINGSHOT_FACE_MM * Math.cos(_faceRad); // ≈ 57 px
 export const SLINGSHOT_H = SLINGSHOT_FACE_MM * Math.sin(_faceRad); // ≈ 82 px
+
+/**
+ * How much the visible outer wall (AB) is shortened by the corner arc at each
+ * slingshot vertex. Used when aligning the channel wall top to the
+ * arc-trimmed edge of the slingshot.
+ */
+export const SLINGSHOT_SHORTEN_BY = 20;

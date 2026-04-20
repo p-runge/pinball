@@ -6,7 +6,13 @@ import {
   FLIPPER_REST_ANGLE_DEG,
 } from "../objects/Flipper";
 import { PLUNGER_BODY_H } from "../objects/Plunger";
-import { LANE_WIDTH, TABLE_H, TABLE_W } from "./constants";
+import {
+  LANE_WIDTH,
+  SLINGSHOT_H,
+  SLINGSHOT_SHORTEN_BY,
+  TABLE_H,
+  TABLE_W,
+} from "./constants";
 
 export interface TableLayout {
   // Outer table bounds
@@ -14,6 +20,9 @@ export interface TableLayout {
   right: number;
   top: number;
   bottom: number;
+
+  // Center X coordinate
+  centerX: number;
 
   // Plunger lane
   plungerSep: number;
@@ -36,6 +45,10 @@ export interface TableLayout {
   arcEndAngleLeft: number;
   arcEndAngleRight: number;
   UPPER_EDGE_ANGLE: number;
+
+  // Slingshot geometry (needed for channel wall and arc positioning)
+  slingshotAnchorY: number;
+  slingshotTopY: number;
 
   // Protective arc geometry
   protectY: number;
@@ -106,7 +119,24 @@ export function computeTableLayout(width: number, height: number): TableLayout {
   // Protective arc end-point offsets (eighth-circle, 45°)
   const PROTECT_ARC_END_DX = PROTECT_R * (1 - Math.SQRT1_2);
   const PROTECT_ARC_END_DY = PROTECT_R * Math.SQRT1_2;
-  const protectY = gutterY - PROTECT_R - 12;
+
+  // Slingshot anchor: outer-bottom corner A, LANE_WIDTH (perpendicular) above
+  // the angled channel wall.  Both walls share slope m = tan(UPPER_EDGE_ANGLE);
+  // perpendicular distance between y=mx+b₁ and y=mx+b₂ is |b₁−b₂|·cos(α).
+  const _m = Math.tan(UPPER_EDGE_ANGLE);
+  const _cosA = Math.cos(UPPER_EDGE_ANGLE);
+  const slingshotAnchorY =
+    flipperY +
+    _m * (leftWallX + LANE_WIDTH - gutterInnerLeft) -
+    LANE_WIDTH / _cosA;
+  // slingshotTopY: outer-top corner B — top of the slingshot outer wall (AB).
+  // SLINGSHOT_SHORTEN_BY accounts for the corner arcs trimming the vertices.
+  const slingshotTopY = slingshotAnchorY - SLINGSHOT_H + SLINGSHOT_SHORTEN_BY;
+
+  // Protective arc: bottom end is LANE_WIDTH above the top of the channel wall.
+  //   bottom end Y  = protectY + PROTECT_ARC_END_DY  = slingshotTopY − LANE_WIDTH
+  //   ⟹ protectY   = slingshotTopY − LANE_WIDTH − PROTECT_ARC_END_DY
+  const protectY = slingshotTopY - LANE_WIDTH - PROTECT_ARC_END_DY;
 
   // Plunger-lane ball spawn geometry
   const laneX = (plungerSep + right) / 2;
@@ -117,6 +147,7 @@ export function computeTableLayout(width: number, height: number): TableLayout {
     right,
     top,
     bottom,
+    centerX,
     plungerSep,
     plungerEntryY,
     laneX,
@@ -133,6 +164,8 @@ export function computeTableLayout(width: number, height: number): TableLayout {
     arcEndAngleLeft,
     arcEndAngleRight,
     UPPER_EDGE_ANGLE,
+    slingshotAnchorY,
+    slingshotTopY,
     protectY,
     PROTECT_ARC_END_DX,
     PROTECT_ARC_END_DY,

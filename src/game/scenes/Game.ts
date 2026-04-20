@@ -40,7 +40,7 @@ export class Game extends Scene {
 
     const { width, height } = this.scale;
     const layout = computeTableLayout(width, height);
-    const { left, right, top } = layout;
+    const { centerX, right, top } = layout;
 
     // ── Layout areas ───────────────────────────────────────────────────────────
     setupTableBorder(this, layout);
@@ -60,14 +60,13 @@ export class Game extends Scene {
     this.rightFlipper = rightFlipper;
 
     // ── Bumpers ────────────────────────────────────────────────────────────────
-    const bumperCenterX = (left + layout.plungerSep) / 2;
     const bumperTopY = top + 220;
     const bumperDx = 42;
     const bumperDy = 68;
     const onBumperHit = () => this.addScore(100);
-    new Bumper(this, bumperCenterX - bumperDx, bumperTopY, onBumperHit);
-    new Bumper(this, bumperCenterX + bumperDx, bumperTopY, onBumperHit);
-    new Bumper(this, bumperCenterX, bumperTopY + bumperDy, onBumperHit);
+    new Bumper(this, centerX - bumperDx, bumperTopY, onBumperHit);
+    new Bumper(this, centerX + bumperDx, bumperTopY, onBumperHit);
+    new Bumper(this, centerX, bumperTopY + bumperDy, onBumperHit);
 
     this.spawnBall();
 
