@@ -4,6 +4,9 @@ export const WALL_T = 4;
 /** Width of the playfield table. */
 export const TABLE_W = 420;
 
+/** Width of a lane (plunger lane and gutter side lanes). */
+export const LANE_WIDTH = 40;
+
 // ── Physics tunables ──────────────────────────────────────────────────────────
 
 /** Fixed number of physics sub-steps per render frame. */

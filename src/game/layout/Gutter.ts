@@ -3,6 +3,7 @@ import { CenterPost } from "../objects/CenterPost";
 import { Flipper } from "../objects/Flipper";
 import { Slingshot } from "../objects/Slingshot";
 import { addBodiesFromSvgPath } from "../utils/svgPhysics";
+import { LANE_WIDTH } from "./constants";
 import { addWallSeg } from "./wallSegment";
 import { TableLayout } from "./tableLayout";
 
@@ -155,7 +156,7 @@ export function setupGutter(
 
   // Center post — deflects a ball falling straight down the center back toward
   // a flipper.
-  new CenterPost(scene, (gutterInnerLeft + gutterInnerRight) / 2, bottom + 10);
+  new CenterPost(scene, (gutterInnerLeft + gutterInnerRight) / 2, bottom + 15);
 
   // Slingshots — triangular kickers just above the gutter diagonals, flush
   // against the side walls. Only the inner hypotenuse face is active.
@@ -163,7 +164,7 @@ export function setupGutter(
   const slingshotH = 120;
   new Slingshot(
     scene,
-    leftWallX + 36,
+    leftWallX + LANE_WIDTH,
     gutterY + 82,
     "left",
     slingshotW,
@@ -173,7 +174,7 @@ export function setupGutter(
   );
   new Slingshot(
     scene,
-    rightWallX - 36,
+    rightWallX - LANE_WIDTH,
     gutterY + 82,
     "right",
     slingshotW,

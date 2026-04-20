@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { LANE_WIDTH } from "../layout/constants";
 
 const MAX_CHARGE_MS = 2000;
 
@@ -11,7 +12,7 @@ const MAX_CHARGE_MS = 2000;
 const MAX_SPEED = 33;
 
 /** Physics body dimensions — full lane width so there's no gap to fall through. */
-export const PLUNGER_BODY_W = 36;
+export const PLUNGER_BODY_W = LANE_WIDTH;
 export const PLUNGER_BODY_H = 8;
 
 /** Visual plunger head width (narrower than the physics body). */

@@ -5,7 +5,7 @@ import {
   FLIPPER_REST_ANGLE_DEG,
 } from "../objects/Flipper";
 import { PLUNGER_BODY_H } from "../objects/Plunger";
-import { TABLE_W } from "./constants";
+import { LANE_WIDTH, TABLE_W } from "./constants";
 
 export interface TableLayout {
   // Outer table bounds
@@ -59,7 +59,7 @@ export function computeTableLayout(width: number, height: number): TableLayout {
   const bottom = height - 20;
 
   // Plunger lane (right side)
-  const plungerSep = right - 36; // separator between playfield and plunger lane
+  const plungerSep = right - LANE_WIDTH; // separator between playfield and plunger lane
   const plungerEntryY = 200; // Y where the ball can enter the playfield
 
   // Y at which the lower channel zone begins
@@ -72,7 +72,7 @@ export function computeTableLayout(width: number, height: number): TableLayout {
 
   const flipperY = gutterY + 140;
 
-  const LANE_WALL_OFFSET = 36;
+  const LANE_WALL_OFFSET = LANE_WIDTH;
   const LOWER_CORNER_R = 30;
   const CORNER_R = 60;
   const PROTECT_R = 120;

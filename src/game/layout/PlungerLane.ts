@@ -2,6 +2,7 @@ import { Scene } from "phaser";
 import { Ball, BALL_RADIUS } from "../objects/Ball";
 import { OneWayGate } from "../objects/OneWayGate";
 import { Plunger, PLUNGER_BODY_H } from "../objects/Plunger";
+import { LANE_WIDTH } from "./constants";
 import { addWallSeg } from "./wallSegment";
 import { TableLayout } from "./tableLayout";
 
@@ -61,8 +62,8 @@ export function setupPlungerLane(
     scene,
     plungerSep,
     plungerEntryY,
-    plungerSep + 36,
-    plungerEntryY - 36,
+    plungerSep + LANE_WIDTH,
+    plungerEntryY - LANE_WIDTH,
     1, // ball may cross from bottom-right (plunger lane side)
     () => getBall()
   );
