@@ -89,7 +89,7 @@ export function computeTableLayout(width: number, height: number): TableLayout {
   const flipperY = gutterY + 140;
 
   const LOWER_CORNER_R = 30;
-  const CORNER_R = 60;
+  const CORNER_R = 120;
   const PROTECT_R = 120;
 
   const leftWallX = left + LANE_WIDTH;

@@ -1,13 +1,13 @@
 import { Scene } from "phaser";
 import { EventBus } from "../EventBus";
 import { Ball } from "../objects/Ball";
-import { Bumper } from "../objects/Bumper";
 import { Flipper } from "../objects/Flipper";
 import { STEPS } from "../layout/constants";
 import { computeTableLayout } from "../layout/tableLayout";
 import { setupTableBorder } from "../layout/TableBorder";
 import { setupPlungerLane } from "../layout/PlungerLane";
 import { setupGutter } from "../layout/Gutter";
+import { setupPlayfield } from "../layout/Playfield";
 import { CcdHandler } from "../physics/CcdHandler";
 
 const TOTAL_BALLS = 3;
@@ -22,11 +22,15 @@ export class Game extends Scene {
   private ball!: Ball;
   private ballsText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
+  private multiplierText!: Phaser.GameObjects.Text;
   private ballSpawnX = 0;
   private ballSpawnY = 0;
   private ballsLeft = TOTAL_BALLS;
   private drainQueued = false;
   private score = 0;
+  private scoreMultiplier = 1;
+  private multiplierTimer: Phaser.Time.TimerEvent | null = null;
+  private resetRolloverLanes!: () => void;
   private ccdHandler!: CcdHandler;
 
   constructor() {
@@ -37,10 +41,11 @@ export class Game extends Scene {
     this.ballsLeft = TOTAL_BALLS;
     this.drainQueued = false;
     this.score = 0;
+    this.scoreMultiplier = 1;
 
     const { width, height } = this.scale;
     const layout = computeTableLayout(width, height);
-    const { centerX, right, top } = layout;
+    const { right, top } = layout;
 
     // ── Layout areas ───────────────────────────────────────────────────────────
     setupTableBorder(this, layout);
@@ -59,14 +64,15 @@ export class Game extends Scene {
     this.leftFlipper = leftFlipper;
     this.rightFlipper = rightFlipper;
 
-    // ── Bumpers ────────────────────────────────────────────────────────────────
-    const bumperTopY = top + 220;
-    const bumperDx = 42;
-    const bumperDy = 68;
-    const onBumperHit = () => this.addScore(100);
-    new Bumper(this, centerX - bumperDx, bumperTopY, onBumperHit);
-    new Bumper(this, centerX + bumperDx, bumperTopY, onBumperHit);
-    new Bumper(this, centerX, bumperTopY + bumperDy, onBumperHit);
+    // ── Playfield elements ─────────────────────────────────────────────────────
+    const { resetRolloverLanes } = setupPlayfield(this, layout, {
+      onBumperHit: () => this.addScore(100),
+      onAllRolloversLit: () => this.activateMultiplier(),
+      onDropTargetHit: () => this.addScore(150),
+      onDropBankCleared: () => this.addScore(1000),
+      onStandupHit: () => this.addScore(200),
+    });
+    this.resetRolloverLanes = resetRolloverLanes;
 
     this.spawnBall();
 
@@ -112,6 +118,26 @@ export class Game extends Scene {
       })
       .setOrigin(0, 0);
     this.updateScoreText();
+
+    this.add
+      .text(right + 24, top + 130, "MULT", {
+        fontFamily: "Arial Black",
+        fontSize: 14,
+        color: "#aaaaaa",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0, 0);
+
+    this.multiplierText = this.add
+      .text(right + 24, top + 148, "1×", {
+        fontFamily: "Arial Black",
+        fontSize: 26,
+        color: "#888888",
+        stroke: "#000000",
+        strokeThickness: 4,
+      })
+      .setOrigin(0, 0);
 
     // ── Keyboard controls ──────────────────────────────────────────────────────
     // Key events fire immediately on press/release, before the next update()
@@ -159,8 +185,23 @@ export class Game extends Scene {
   }
 
   private addScore(points: number): void {
-    this.score += points;
+    this.score += points * this.scoreMultiplier;
     this.updateScoreText();
+  }
+
+  private activateMultiplier(): void {
+    this.scoreMultiplier = 2;
+    this.multiplierText.setText("2×").setColor("#00e5ff");
+    if (this.multiplierTimer) this.multiplierTimer.remove();
+    this.multiplierTimer = this.time.delayedCall(15000, () =>
+      this.deactivateMultiplier()
+    );
+  }
+
+  private deactivateMultiplier(): void {
+    this.scoreMultiplier = 1;
+    this.multiplierText.setText("1×").setColor("#888888");
+    this.multiplierTimer = null;
   }
 
   private updateBallsText(): void {
@@ -198,6 +239,10 @@ export class Game extends Scene {
       this.ball.destroy();
       this.ballsLeft -= 1;
       this.updateBallsText();
+
+      // Reset per-ball state
+      this.deactivateMultiplier();
+      this.resetRolloverLanes();
 
       if (this.ballsLeft <= 0) {
         this.scene.start("GameOver", { score: this.score });
