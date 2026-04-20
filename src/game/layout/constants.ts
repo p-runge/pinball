@@ -58,3 +58,35 @@ export const WALL_RESTITUTION = 0.3;
 
 /** Restitution for flipper CCD contacts. Higher than walls for a lively feel. */
 export const FLIPPER_RESTITUTION = 0.7;
+
+// ── Slingshot geometry ────────────────────────────────────────────────────────
+
+/**
+ * Length of the slingshot active face (mm ≈ px).
+ * Real machines use rubber bands with an inside circumference of 2.0–2.5",
+ * giving an active face of roughly 90–110 mm. 100 mm is the practical midpoint.
+ */
+export const SLINGSHOT_FACE_MM = 150;
+
+/**
+ * Angle of the slingshot active face from horizontal (degrees).
+ * 50–60° is the documented range; 55° is the typical mid-field value.
+ */
+export const SLINGSHOT_FACE_ANGLE_DEG = 70;
+
+/**
+ * Derived slingshot triangle dimensions from the face spec.
+ *
+ * The outer wall (AB) is vertical and the bottom wall (CA) is horizontal,
+ * giving a right angle at the outer-bottom corner A — consistent with
+ * Williams/Bally machines where the outer edge runs close to 90° relative
+ * to the cabinet side wall.
+ *
+ *   w = FACE_MM × cos(FACE_ANGLE)  ≈  57 px  (horizontal extent, ≈ CA length)
+ *   h = FACE_MM × sin(FACE_ANGLE)  ≈  82 px  (outer wall height, AB)
+ *
+ * Resulting angles: A ≈ 90°, B (upfield apex) ≈ 35°, C (inner) ≈ 55°.
+ */
+const _faceRad = (SLINGSHOT_FACE_ANGLE_DEG * Math.PI) / 180;
+export const SLINGSHOT_W = SLINGSHOT_FACE_MM * Math.cos(_faceRad); // ≈ 57 px
+export const SLINGSHOT_H = SLINGSHOT_FACE_MM * Math.sin(_faceRad); // ≈ 82 px

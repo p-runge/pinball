@@ -3,7 +3,7 @@ import { CenterPost } from "../objects/CenterPost";
 import { Flipper } from "../objects/Flipper";
 import { Slingshot } from "../objects/Slingshot";
 import { addBodiesFromSvgPath } from "../utils/svgPhysics";
-import { LANE_WIDTH } from "./constants";
+import { LANE_WIDTH, SLINGSHOT_H, SLINGSHOT_W } from "./constants";
 import { addWallSeg } from "./wallSegment";
 import { TableLayout } from "./tableLayout";
 
@@ -160,25 +160,43 @@ export function setupGutter(
 
   // Slingshots — triangular kickers just above the gutter diagonals, flush
   // against the side walls. Only the inner hypotenuse face is active.
-  const slingshotW = 50;
-  const slingshotH = 100;
+  // Shape matches real-world spec: 100 mm active face at 55° from horizontal.
+  // The bottom wall slopes at UPPER_EDGE_ANGLE so it stays parallel to the
+  // angled channel wall that leads to each flipper.
+  //
+  // Anchor = outer bottom corner A:
+  //   x — LANE_WIDTH from the outer channel wall (straightforward)
+  //   y — positioned so the perpendicular gap between the slingshot bottom wall
+  //       and the angled channel wall equals LANE_WIDTH.
+  //
+  // Both walls share slope m = tan(UPPER_EDGE_ANGLE).  For two parallel lines
+  // y = mx + b₁ and y = mx + b₂, perpendicular distance = |b₁−b₂| × cos(α).
+  // Setting that equal to LANE_WIDTH and solving for y_A:
+  //   y_A = flipperY + m × (x_A − gutterInnerLeft) − LANE_WIDTH / cos(α)
+  const m = Math.tan(UPPER_EDGE_ANGLE);
+  const cosA = Math.cos(UPPER_EDGE_ANGLE);
+  const slingshotAnchorY =
+    flipperY +
+    m * (leftWallX + LANE_WIDTH - gutterInnerLeft) -
+    LANE_WIDTH / cosA;
+
   new Slingshot(
     scene,
     leftWallX + LANE_WIDTH,
-    gutterY + 42,
+    slingshotAnchorY,
     "left",
-    slingshotW,
-    slingshotH,
+    SLINGSHOT_W,
+    SLINGSHOT_H,
     UPPER_EDGE_ANGLE,
     onSlingshotHit
   );
   new Slingshot(
     scene,
     rightWallX - LANE_WIDTH,
-    gutterY + 42,
+    slingshotAnchorY,
     "right",
-    slingshotW,
-    slingshotH,
+    SLINGSHOT_W,
+    SLINGSHOT_H,
     UPPER_EDGE_ANGLE,
     onSlingshotHit
   );
