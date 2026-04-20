@@ -5,7 +5,7 @@ import {
   FLIPPER_REST_ANGLE_DEG,
 } from "../objects/Flipper";
 import { PLUNGER_BODY_H } from "../objects/Plunger";
-import { LANE_WIDTH, TABLE_W } from "./constants";
+import { LANE_WIDTH, TABLE_H, TABLE_W } from "./constants";
 
 export interface TableLayout {
   // Outer table bounds
@@ -55,8 +55,8 @@ export interface TableLayout {
 export function computeTableLayout(width: number, height: number): TableLayout {
   const left = (width - TABLE_W) / 2;
   const right = left + TABLE_W;
-  const top = 20;
-  const bottom = height - 20;
+  const top = (height - TABLE_H) / 2;
+  const bottom = top + TABLE_H;
 
   // Plunger lane (right side)
   const plungerSep = right - LANE_WIDTH; // separator between playfield and plunger lane
@@ -67,8 +67,8 @@ export function computeTableLayout(width: number, height: number): TableLayout {
 
   // Flipper pivot X positions — moved 6 px inward from the outer walls to
   // narrow the central gap slightly.
-  const gutterInnerLeft = left + 96;
-  const gutterInnerRight = plungerSep - 96;
+  const gutterInnerLeft = left + 206;
+  const gutterInnerRight = plungerSep - 206;
 
   const flipperY = gutterY + 140;
 

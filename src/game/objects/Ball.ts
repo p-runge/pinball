@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 
-const RADIUS = 15;
+const RADIUS = 13.5;
 export const BALL_RADIUS = RADIUS;
 
 /**
@@ -30,6 +30,8 @@ export class Ball extends Phaser.GameObjects.Container {
       label: "ball",
       restitution: 0.3,
       friction: 0,
+      // Density is tuned so the ball weighs 80g at radius 13.5, which is in the ballpark for a real pinball
+      density: 0.00979,
       //   frictionAir: 0.001,
     });
     scene.matter.world.add(this._physicsBody);

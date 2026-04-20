@@ -2,11 +2,13 @@ import Phaser from "phaser";
 
 export type FlipperSide = "left" | "right";
 
-export const FLIPPER_LENGTH = 70;
+export const FLIPPER_LENGTH = 80;
 export const FLIPPER_HALF_THICK = 10;
 export const FLIPPER_HALF_THIN = 5;
 export const FLIPPER_REST_ANGLE_DEG = 30;
-export const FLIPPER_ACTIVE_ANGLE_DEG = -30;
+const SWING_ANGLE_DEG = 52;
+export const FLIPPER_ACTIVE_ANGLE_DEG =
+  FLIPPER_REST_ANGLE_DEG - SWING_ANGLE_DEG;
 
 const LENGTH = FLIPPER_LENGTH;
 const HALF_THICK = FLIPPER_HALF_THICK;

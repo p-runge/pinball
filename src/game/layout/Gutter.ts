@@ -160,12 +160,12 @@ export function setupGutter(
 
   // Slingshots — triangular kickers just above the gutter diagonals, flush
   // against the side walls. Only the inner hypotenuse face is active.
-  const slingshotW = 60;
-  const slingshotH = 120;
+  const slingshotW = 50;
+  const slingshotH = 100;
   new Slingshot(
     scene,
     leftWallX + LANE_WIDTH,
-    gutterY + 82,
+    gutterY + 62,
     "left",
     slingshotW,
     slingshotH,
@@ -175,7 +175,7 @@ export function setupGutter(
   new Slingshot(
     scene,
     rightWallX - LANE_WIDTH,
-    gutterY + 82,
+    gutterY + 62,
     "right",
     slingshotW,
     slingshotH,

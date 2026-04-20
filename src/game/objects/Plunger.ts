@@ -1,15 +1,55 @@
 import Phaser from "phaser";
-import { LANE_WIDTH } from "../layout/constants";
+import {
+  BASE_DELTA,
+  LANE_WIDTH,
+  PX_PER_M,
+  TARGET_LAUNCH_SPEED_MS,
+} from "../layout/constants";
 
 const MAX_CHARGE_MS = 2000;
 
 /**
- * Velocity (px/step) applied to the plunger surface for one physics sub-step
- * on release.  The collision resolver sees this velocity and applies an impulse
- * to the ball.  With ball.restitution = 0.3 (max of the pair), the ball ends
- * up at ≈ (1 + 0.3) × MAX_SPEED ≈ 43 px/step — enough to reach the top corner.
+ * Ball restitution is 0.3 and plunger restitution is 0.0, so the pair's
+ * effective coefficient is max(0.3, 0.0) = 0.3.
+ *
+ * Kept local so it stays next to the derivation below; it must match the
+ * value in Ball.ts.
  */
-const MAX_SPEED = 33;
+const BALL_RESTITUTION = 0.3;
+
+/**
+ * Velocity (px/BASE_DELTA) stored as the plunger body's normalised velocity.
+ *
+ * --- Why "normalised velocity"? ---
+ * Dynamic bodies have `body.deltaTime = stepDelta` (e.g. BASE_DELTA/3 with
+ * STEPS=3). When you call `Body.setVelocity(dynamicBody, {y: V})`, Matter.js
+ * internally shifts `positionPrev` by `V × (body.deltaTime / BASE_DELTA)` so
+ * the raw Verlet displacement per step is `V × (stepDelta/BASE_DELTA)`.
+ *
+ * Static bodies SKIP `Body.update`, so `body.deltaTime` stays at its default
+ * of BASE_DELTA forever. Calling `Body.setVelocity(staticBody, {y: V})` shifts
+ * `positionPrev` by `V × 1 = V` — as if the plunger moves V raw pixels per
+ * sub-step, REGARDLESS of how large that sub-step is.
+ *
+ * To compensate, `step()` scales the velocity it sets by
+ * `event.delta / BASE_DELTA` at call time, so the raw displacement the
+ * resolver sees is `V × (event.delta / BASE_DELTA)` — identical to what a
+ * dynamic body normalised velocity V would produce.
+ *
+ * --- Speed derivation ---
+ * After scaling, the ball receives (1 + BALL_RESTITUTION) × MAX_SPEED raw
+ * px/step from the impulse. Speed in real units:
+ *
+ *   speed (m/s) = (1 + e) × MAX_SPEED × (event.delta/BASE_DELTA) × steps/s / PX_PER_M
+ *              = (1 + e) × MAX_SPEED × FPS / PX_PER_M     (FPS = 60, STEPS cancel)
+ *
+ * So for TARGET_LAUNCH_SPEED_MS:
+ *
+ *   MAX_SPEED = TARGET_LAUNCH_SPEED_MS × PX_PER_M / ((1 + BALL_RESTITUTION) × FPS)
+ *             ≈ 3.5 × 1000 / (1.3 × 60) ≈ 44.9 px/BASE_DELTA
+ */
+const MAX_SPEED =
+  (TARGET_LAUNCH_SPEED_MS * PX_PER_M) / ((1 + BALL_RESTITUTION) * 60);
 
 /** Physics body dimensions — full lane width so there's no gap to fall through. */
 export const PLUNGER_BODY_W = LANE_WIDTH;
@@ -18,7 +58,7 @@ export const PLUNGER_BODY_H = 8;
 /** Visual plunger head width (narrower than the physics body). */
 const HEAD_W = 22;
 /** How far the head pulls back visually at full charge (cosmetic only). */
-const MAX_PULLBACK = 22;
+const MAX_PULLBACK = 40;
 
 const BAR_W = 7;
 const BAR_H = 80;
@@ -138,22 +178,23 @@ export class Plunger {
       (performance.now() - this.chargeStart) / MAX_CHARGE_MS,
       1
     );
-    if (charge > 0.02) {
-      // Store the speed; applied in the very next beforeupdate call.
-      this.pendingSpeed = charge * MAX_SPEED;
-    }
+
+    // Store the speed; applied in the very next beforeupdate call.
+    this.pendingSpeed = charge * MAX_SPEED;
   }
 
   // ── Physics ────────────────────────────────────────────────────────────────
 
-  private step(): void {
+  private step(event: { delta: number }): void {
     const { body } = this.scene.matter;
     if (this.pendingSpeed !== 0) {
-      // Apply the launch impulse for one sub-step.
-      // The collision resolver reads body.velocity for static bodies when
-      // computing relative velocity at contact and applies the impulse only
-      // to the non-static body (the ball).
-      body.setVelocity(this.physicsBody, { x: 0, y: -this.pendingSpeed });
+      // Scale by event.delta/BASE_DELTA to compensate for the static body's
+      // timeScale = 1 in Body.setVelocity (see MAX_SPEED comment above).
+      const scale = event.delta / BASE_DELTA;
+      body.setVelocity(this.physicsBody, {
+        x: 0,
+        y: -this.pendingSpeed * scale,
+      });
       body.setAngularVelocity(this.physicsBody, 0);
       this.pendingSpeed = 0;
     } else {
