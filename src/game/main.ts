@@ -3,6 +3,7 @@ import { env } from "../env";
 import { GRAVITY_Y, TABLE_H, TABLE_W } from "./layout/constants";
 import { Game as PinballGame } from "./scenes/Game";
 import { GameOver } from "./scenes/GameOver";
+import { Highscores } from "./scenes/Highscores";
 import { MainMenu } from "./scenes/MainMenu";
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -23,7 +24,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: env.VITE_DEBUG,
     },
   },
-  scene: [MainMenu, PinballGame, GameOver],
+  scene: [MainMenu, PinballGame, GameOver, Highscores],
 };
 
 const StartGame = (parent: string) => {
