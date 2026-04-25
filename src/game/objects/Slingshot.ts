@@ -5,6 +5,9 @@ export type SlingshotSide = "left" | "right";
 
 const SLINGSHOT_KICK = 15;
 
+/** Maximum ball speed after a slingshot kick (px/step). Prevents runaway loops. */
+const MAX_BALL_SPEED = 40;
+
 /**
  * Radius of the inscribed corner arcs at every vertex.
  * Larger = smoother corners, but shortens the active face.
@@ -275,10 +278,28 @@ export class Slingshot extends Phaser.GameObjects.Container {
   }
 
   private kick(ballBody: MatterJS.BodyType): void {
-    this.scene.matter.body.setVelocity(ballBody, {
-      x: ballBody.velocity.x + this.activeNx * SLINGSHOT_KICK,
-      y: ballBody.velocity.y + this.activeNy * SLINGSHOT_KICK,
-    });
+    const vx = ballBody.velocity.x;
+    const vy = ballBody.velocity.y;
+
+    // Project current velocity onto the outward normal.
+    // vn is negative when the ball is moving INTO the slingshot face.
+    const vn = vx * this.activeNx + vy * this.activeNy;
+
+    // Reflect the normal component (elastic bounce) and add the kick on top.
+    // Result: outgoing normal speed = -vn + KICK  (always positive since vn ≤ 0)
+    const impulse = -2 * vn + SLINGSHOT_KICK;
+    let newVx = vx + this.activeNx * impulse;
+    let newVy = vy + this.activeNy * impulse;
+
+    // Cap speed to prevent runaway energy buildup in edge-case loop scenarios.
+    const speed = Math.hypot(newVx, newVy);
+    if (speed > MAX_BALL_SPEED) {
+      const scale = MAX_BALL_SPEED / speed;
+      newVx *= scale;
+      newVy *= scale;
+    }
+
+    this.scene.matter.body.setVelocity(ballBody, { x: newVx, y: newVy });
     this.onHit?.();
   }
 }
